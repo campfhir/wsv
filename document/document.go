@@ -415,6 +415,21 @@ func (doc *Document) ReIndexLineNumbers() {
 	}
 }
 
+func (doc *Document) WriteAllTo(w io.Writer) error {
+	for {
+		d, err := doc.Write()
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+		w.Write(d)
+	}
+	return nil
+}
+
 func NewDocument() *Document {
 	doc := Document{
 		Tabular:          true,

@@ -473,7 +473,11 @@ func (r *Reader) ToDocument() (*doc.Document, error) {
 		}
 		for i := range rl.FieldCount() {
 			field, _ := rl.Field(i)
-			line.Append(field.Value)
+			if field.IsNull {
+				line.AppendNull()
+			} else {
+				line.Append(field.Value)
+			}
 		}
 	}
 
