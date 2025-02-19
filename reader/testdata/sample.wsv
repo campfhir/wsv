@@ -1,0 +1,31 @@
+
+Country						Capital    	        "Emoji of Flag" "Interesting Facts" 																								#facts generated from Google's Gemini 2024-04-24
+
+France						Paris	            🇫🇷			  "The Eiffel Tower was built for the 1889 World's Fair."/"It was almost torn down afterwards."
+
+Germany						Berlin				🇩🇪              "Germany has over 2,000 beer breweries."
+Italy						Rome				🇮🇹			  "The Colosseum in Rome could hold an estimated 50,000 spectators."
+
+Japan						Tokyo				🇯🇵🇯🇵			"Japan is a volcanic archipelago with over 100 active volcanoes."/"The currency is the yen and the symbol is ¥."   #has half-width characters
+Spain						Madrid				🇪🇸              "Spain has the second highest number of UNESCO World Heritage Sites in the world."
+
+"United Kingdom"			London	            🇬🇧			  "The United Kingdom is a parliamentary monarchy with a rich history dating back centuries."
+
+# emphasis on 50 with double quotes
+
+"United States of America"  "Washington D.C." 	"🇺🇸 🏴‍☠️"           "The United States of America is a federal republic with ""50"" states." 
+
+# update the remaining
+India						""					🇮🇳			  -
+Canada						Ottawa				""			    -																													 #need to add facts for the remaining
+Australia					Canberra			🇦🇺			  -
+
+
+Brazil						Brasília			🇧🇷			  -
+Argentina					"Buenos Aires"		🇦🇷			  -
+Mexico						"Mexico City"		🇲🇽			  -	
+
+
+China						Beijing				🇨🇳			  -
+Russia						Moscow				🇷🇺			  -
+

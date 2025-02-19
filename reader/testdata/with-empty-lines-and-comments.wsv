@@ -1,0 +1,7 @@
+fName lName dob gender #these are headers
+
+
+#here we go!
+john doe 2023-01-01 M #this data is probably not accurate
+jane smith 2024-01-01 F
+#this is a comment

@@ -1,0 +1,3 @@
+name  jersey  team   sport
+john  15      tigers baseball
+jane  8   #invalid comment placement, comments should only appear as the last field, if are preceding fields that are omitted an error should be returned, to fix we would explicitly mark the team and sport fields with -'s or empty string values
