@@ -3,10 +3,8 @@ package document
 import (
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/campfhir/wsv/record"
-	"github.com/campfhir/wsv/utils"
 )
 
 var (
@@ -58,16 +56,6 @@ type DocumentLine interface {
 	// Select a field record by name
 	FieldByName(fieldName string) (*record.RecordField, error)
 
-	// Cmp compares the line with another line for sorting
-	//
-	// returns
-	//
-	// if:
-	//
-	//	-1 when line[Field].Value < cmpLine[Field].Value or line[Field].Value is nil
-	//	 0 when line[Field].Value == cmpLine[Field].Value
-	//	+1 when line[Field].Value > cmpLine[Field].Value or cmpLine[Field].Value is nil
-	Compare(fieldName string, cmpLine DocumentLine, desc bool) int
 	// fields from the line
 	Fields() []record.RecordField
 	// returns true if this line is a header line
@@ -129,7 +117,7 @@ func (line *documentLine) Append(val string) error {
 		return ErrFieldCount
 	}
 
-	if line.line > line.doc.headerLine && len(line.doc.Headers())-1 > fieldInd {
+	if line.line > line.doc.headerLine && len(line.doc.Headers())-1 >= fieldInd {
 		field.FieldName = line.doc.Headers()[fieldInd]
 	}
 	field.FieldIndex = fieldInd
@@ -170,66 +158,6 @@ func (line *documentLine) AppendNull() error {
 	// increment the field count for the line
 	line.fieldCount++
 	return nil
-}
-
-// Compare compares the line with another line for sorting
-// returns
-//
-// if:
-//
-//	-1 when line[Field].Value < cmpLine[Field].Value or line[Field].Value is nil
-//	 0 when line[Field].Value == cmpLine[Field].Value
-//	+1 when line[Field].Value > cmpLine[Field].Value or cmpLine[Field].Value is nil
-func (line *documentLine) Compare(fieldName string, cmpLine DocumentLine, desc bool) int {
-	if line.IsHeader() {
-		return -1
-	}
-	if cmpLine.IsHeader() {
-		return +1
-	}
-	a, err := line.FieldByName(fieldName)
-	if err != nil {
-		return -1
-	}
-	b, err := cmpLine.FieldByName(fieldName)
-	if err != nil {
-		return +1
-	}
-	if aint, err := strconv.ParseInt(a.Value, 10, utils.PtrSize()); err == nil {
-		if bint, err := strconv.ParseInt(b.Value, 10, utils.PtrSize()); err == nil {
-			if aint < bint {
-				if desc {
-					return +1
-				}
-				return -1
-			}
-			if aint > bint {
-				if desc {
-					return -1
-				}
-				return +1
-			}
-			if aint == bint {
-				return 0
-			}
-		}
-		return +1
-	}
-
-	if a.Value < b.Value {
-		if desc {
-			return +1
-		}
-		return -1
-	}
-	if a.Value > b.Value {
-		if desc {
-			return -1
-		}
-		return +1
-	}
-
-	return 0
 }
 
 func (line *documentLine) NextField() (*record.RecordField, error) {

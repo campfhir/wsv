@@ -351,10 +351,10 @@ func TestSorting(t *testing.T) {
 	doc.AppendLine(Field("George"), Field("55"), Field("Male"))
 	doc.AppendLine(Field("Jane"), Field("79"), Field("Female"))
 
-	doc.SortBy([]SortOption{
-		{FieldName: "Name"},
-		{FieldName: "Age", Desc: true},
-	}...)
+	doc.SortBy(
+		Sort("Name"),
+		SortNumberDesc("Age"),
+	)
 
 	expDoc := NewDocument()
 	expDoc.AppendLine(Fields("Name", "Age", "Gender")...)
@@ -385,9 +385,7 @@ func TestNumericFieldsDescSorting(t *testing.T) {
 	doc.AppendLine(Field("Zak"), Field("100"), Field("Male"))
 	doc.AppendLine(Field("George"), Field("55"), Field("Male"))
 
-	doc.SortBy([]SortOption{
-		{FieldName: "Age", Desc: true},
-	}...)
+	doc.SortBy(SortNumberDesc("Age"))
 
 	expDoc := NewDocument()
 	expDoc.AppendLine(Fields("Name", "Age", "Gender")...)
@@ -418,9 +416,7 @@ func TestNumericFieldsAscSorting(t *testing.T) {
 	doc.AppendLine(Field("Zak"), Field("100"), Field("Male"))
 	doc.AppendLine(Field("George"), Field("55"), Field("Male"))
 
-	doc.SortBy([]SortOption{
-		{FieldName: "Age"},
-	}...)
+	doc.SortBy(SortNumber("Age"))
 
 	expDoc := NewDocument()
 	expDoc.AppendLine(Fields("Name", "Age", "Gender")...)
@@ -451,10 +447,7 @@ func TestNumericFieldsAscAfterOtherFieldsSorting(t *testing.T) {
 	doc.AppendLine(Field("Patrick"), Field("100"), Field("Female"))
 	doc.AppendLine(Field("George"), Field("55"), Field("Male"))
 
-	doc.SortBy([]SortOption{
-		{FieldName: "Name"},
-		{FieldName: "Age"},
-	}...)
+	doc.SortBy(Sort("Name"), SortNumber("Age"))
 
 	expected := [][]string{
 		{"Name", "Age", "Gender"},
@@ -473,4 +466,29 @@ func TestNumericFieldsAscAfterOtherFieldsSorting(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestLastColumnHasFieldName(t *testing.T) {
+	doc := NewDocument()
+
+	doc.AppendLine(Field("First Name"), Field("Last Name"))
+	doc.AppendLine(Field("Scott"), Field("Eremia-Roden"))
+
+	if len(doc.Headers()) != 2 {
+		t.Error("should have 2 headers but has", len(doc.Headers()))
+		return
+	}
+
+	line2, err := doc.Line(2)
+	if err != nil {
+		t.Error("no line 2")
+		return
+	}
+
+	_, err = line2.FieldByName("Last Name")
+	if err != nil {
+		t.Error("was not able to get the last field", err)
+		return
+	}
+
 }

@@ -6,19 +6,22 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
+	"github.com/campfhir/wsv/internal"
 	"github.com/campfhir/wsv/record"
 	"github.com/campfhir/wsv/utils"
 )
 
 type WriteError struct {
-	line        int
-	fieldIndex  int
-	headerCount int
-
-	err error
+	line               int
+	fieldIndex         int
+	headerCount        int
+	expectedFieldCount int
+	err                error
 }
 
 var (
@@ -40,6 +43,10 @@ func (e *WriteError) Error() string {
 
 	if e.err == ErrFieldIndexedNotFound {
 		return fmt.Sprintf("field %d, %s for line %d", e.fieldIndex, e.err.Error(), e.line)
+	}
+
+	if e.err == ErrFieldCount {
+		return fmt.Sprintf("line %d does not have the proper number of fields, field count %d/%d", e.line, e.fieldIndex, e.expectedFieldCount)
 	}
 
 	return e.err.Error()
@@ -151,28 +158,166 @@ func (doc *Document) AddLine() (DocumentLine, error) {
 // evaluates previous and current record fields and should return true if current field is after previous field
 type SortFunc = func(prv *record.RecordField, curr *record.RecordField) bool
 
-type SortOption struct {
-	// name of the field in the
-	FieldName string
-	Desc      bool
+func Sort(fieldName string) *internal.SortOption {
+	return &internal.SortOption{FieldName: fieldName}
+}
+
+func SortDesc(fieldName string) *internal.SortOption {
+	return &internal.SortOption{
+		FieldName: fieldName,
+		Desc:      true,
+	}
+}
+
+func SortNumber(fieldName string) *internal.SortOption {
+	return &internal.SortOption{FieldName: fieldName, AsNumber: true, NumberRadix: 10}
+}
+
+func SortNumberDesc(fieldName string) *internal.SortOption {
+	return &internal.SortOption{FieldName: fieldName, AsNumber: true, Desc: true, NumberRadix: 10}
+}
+
+func SortNumberBase(fieldName string, base int) *internal.SortOption {
+	return &internal.SortOption{FieldName: fieldName, AsNumber: true, NumberRadix: base}
+}
+
+func SortNumberBaseDesc(fieldName string, base int) *internal.SortOption {
+	return &internal.SortOption{FieldName: fieldName, AsNumber: true, Desc: true, NumberRadix: base}
+}
+
+func SortTime(fieldName string, format string) *internal.SortOption {
+	return &internal.SortOption{FieldName: fieldName, AsTime: true, TimeFormat: format}
+}
+
+func SortTimeDesc(fieldName string, format string) *internal.SortOption {
+	return &internal.SortOption{FieldName: fieldName, AsTime: true, Desc: true, TimeFormat: format}
 }
 
 // Sorts the documents lines in place based on the sort options
 //
 // Will sort until finished or a field specified is not found, in which case a ErrFieldNotFoundForSortBy is returned
-func (doc *Document) SortBy(sortOptions ...SortOption) error {
+func (doc *Document) SortBy(sortOptions ...*internal.SortOption) error {
 	if !doc.Tabular {
 		return ErrCannotSortNonTabularDocument
 	}
+	if sortOptions == nil {
+		return nil
+	}
 
 	for _, sort := range sortOptions {
-		slices.SortStableFunc(doc.lines, func(a DocumentLine, b DocumentLine) int {
-			return a.Compare(sort.FieldName, b, sort.Desc)
+		if sort == nil {
+			continue
+		}
+		slices.SortStableFunc(doc.lines, func(cur DocumentLine, next DocumentLine) int {
+			if cur.IsHeader() {
+				return -1
+			}
+			if next.IsHeader() {
+				return +1
+			}
+			a, err := cur.FieldByName(sort.FieldName)
+			if err != nil {
+				// if sort.Desc {
+				// 	return -1
+				// }
+				return +1
+			}
+			b, err := next.FieldByName(sort.FieldName)
+			if err != nil {
+				// if sort.Desc {
+				// 	return +1
+				// }
+				return -1
+			}
+			return sortFieldsColumn(sort, a, b)
 		})
 
 	}
 	doc.ReIndexLineNumbers()
 	return nil
+}
+
+// Compare compares the line with another line for sorting
+// returns
+//
+// if:
+//
+//	-1 when line[Field].Value < cmpLine[Field].Value or line[Field].Value is nil
+//	 0 when line[Field].Value == cmpLine[Field].Value
+//	+1 when line[Field].Value > cmpLine[Field].Value or cmpLine[Field].Value is nil
+func sortFieldsColumn(opt *internal.SortOption, a *record.RecordField, b *record.RecordField) int {
+
+	if opt.AsTime {
+		order := sortTimeColumn(opt, a, b)
+		if opt.Desc {
+			return order * -1
+		}
+		return order
+	}
+
+	if opt.AsNumber {
+		order := sortNumbersColumn(opt, a, b)
+		if opt.Desc {
+			return order * -1
+		}
+		return order
+	}
+	if a == nil || a.IsNull {
+		return +1
+	}
+	if b == nil || b.IsNull {
+		return -1
+	}
+
+	order := 0
+	if a.Value < b.Value {
+		order = -1
+	} else if a.Value > b.Value {
+		order = +1
+	}
+	if opt.Desc {
+		return order * -1
+	}
+	return order
+}
+
+func sortNumbersColumn(opt *internal.SortOption, a *record.RecordField, b *record.RecordField) int {
+	if a == nil || a.IsNull {
+		return +1
+	}
+	if b == nil || b.IsNull {
+		return -1
+	}
+	number1, err := strconv.ParseInt(a.Value, opt.NumberRadix, internal.PtrSize())
+	if err != nil {
+		return +1
+	}
+	number2, err := strconv.ParseInt(b.Value, opt.NumberRadix, internal.PtrSize())
+	if number1 < number2 {
+		return -1
+	} else if number1 > number2 {
+		return +1
+	}
+
+	return 0
+}
+
+func sortTimeColumn(opt *internal.SortOption, a *record.RecordField, b *record.RecordField) int {
+	if a == nil || a.IsNull {
+		return +1
+	}
+	if b == nil || b.IsNull {
+		return -1
+	}
+	time1, err := time.Parse(opt.TimeFormat, a.Value)
+	if err != nil {
+		return +1
+	}
+	time2, err := time.Parse(opt.TimeFormat, b.Value)
+	if err != nil {
+		return -1
+	}
+	return time1.Compare(time2)
 }
 
 // Returns the document at the ln specified. Lines are 1-index. If the line does not exist there is an
@@ -253,7 +398,7 @@ func (doc *Document) Write() ([]byte, error) {
 	}
 	// if configured to be tabular, not an empty line, and has too little/many fields compared to headers return an error
 	if doc.Tabular && doc.currentWriteLine != 0 && line.FieldCount() != 0 && line.FieldCount() != len(doc.Headers()) {
-		return buf, &WriteError{line: line.LineNumber(), headerCount: len(doc.Headers()), fieldIndex: line.FieldCount(), err: ErrFieldCount}
+		return buf, &WriteError{line: line.LineNumber(), headerCount: len(doc.Headers()), fieldIndex: line.FieldCount(), err: ErrFieldCount, expectedFieldCount: len(doc.Headers())}
 	}
 
 	for i, field := range line.Fields() {
@@ -285,9 +430,9 @@ func (doc *Document) Write() ([]byte, error) {
 	if len(line.Comment()) > 0 {
 		if len(buf) > 0 {
 			buf = append(buf, utils.RuneToBytes(doc.padding)...)
-			buf = append(buf, []byte(fmt.Sprintf("#%s", line.Comment()))...)
+			buf = fmt.Appendf(buf, "#%s", line.Comment())
 		} else {
-			buf = append(buf, []byte(fmt.Sprintf("#%s", line.Comment()))...)
+			buf = fmt.Appendf(buf, "#%s", line.Comment())
 
 		}
 	}

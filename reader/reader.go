@@ -376,8 +376,10 @@ func (r *Reader) Read() (ReaderLine, error) {
 			continue
 		}
 		if field.IsComment {
+
 			// comments must be the first and only value or the last value parsed, if preceding fields are not explicitly defined return an error
-			if i < len(r.headers) && i != 0 {
+			// the exception being non-tabular documents
+			if i < len(r.headers) && i != 0 && r.IsTabular {
 				return &line, &ParseError{Line: r.numLine, Column: 0, Err: ErrCommentPlacement}
 			}
 			line.comment = field.Value

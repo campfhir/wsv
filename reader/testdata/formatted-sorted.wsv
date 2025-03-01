@@ -1,0 +1,7 @@
+id  firstname  lastname        fav_color  permissions                            "date of birth"
+1   rachel     lilly           -          admin                                  -
+2   scott      "eremia-roden"  blue       admin,localhost,developer,janitor,etc  "2024-01-01"
+3   molly      hawk            pink       developer                              "2021-01-01"
+4   john       doe             blue2      -                                      -
+5   jeff       goodyear        green      -                                      "2025-01-01"
+6   jason      borne           -          -                                      -

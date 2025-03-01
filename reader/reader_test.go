@@ -2727,7 +2727,7 @@ func TestReadingAndSortingNumberFields(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	d.SortBy(doc.SortOption{FieldName: "Line", Desc: false})
+	d.SortBy(doc.SortNumber("Line"))
 
 	expected := [][]string{
 		{"Line", "Color", "Last Voted as Favorite"},

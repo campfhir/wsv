@@ -1,53 +1,22 @@
-package document
+package document_test
 
 import (
 	"testing"
 
-	"github.com/campfhir/wsv/record"
+	"github.com/campfhir/wsv/document"
 )
 
-func TestDocumentLineCompareStrings(t *testing.T) {
-	line1 := documentLine{
-		line: 1,
-		fields: []record.RecordField{
-			{FieldName: "key", Value: "OTS-1234", IsNull: false, FieldIndex: 0, RowIndex: 0, IsHeader: false},
-		},
-	}
-	line2 := documentLine{
-		line: 1,
-		fields: []record.RecordField{
-			{FieldName: "key", Value: "OTS-1235", IsNull: false, FieldIndex: 0, RowIndex: 0, IsHeader: false},
-		},
-	}
-	a := line1.Compare("key", &line2, false)
-	if a != -1 {
-		t.Error("did not sort A correctly")
-	}
-	b := line2.Compare("key", &line1, false)
-	if b != 1 {
-		t.Error("did not sort B correctly")
-	}
-}
+func TestDocumentLineValidateWithTabularData(t *testing.T) {
+	doc := document.NewDocument()
+	line, _ := doc.AddLine()
+	line.Append("First Name")
+	line.Append("Fast Name")
 
-func TestDocumentLineCompareNumerics(t *testing.T) {
-	line1 := documentLine{
-		line: 1,
-		fields: []record.RecordField{
-			{FieldName: "key", Value: "1232", IsNull: false, FieldIndex: 0, RowIndex: 0, IsHeader: false},
-		},
-	}
-	line2 := documentLine{
-		line: 1,
-		fields: []record.RecordField{
-			{FieldName: "key", Value: "1231", IsNull: false, FieldIndex: 0, RowIndex: 0, IsHeader: false},
-		},
-	}
-	a := line1.Compare("key", &line2, false)
-	if a != 1 {
-		t.Error("did not sort A correctly")
-	}
-	b := line2.Compare("key", &line1, false)
-	if b != -1 {
-		t.Error("did not sort B correctly")
+	line, _ = doc.AddLine()
+	line.Append("Scott")
+	line.Append("Eremia-Roden")
+	valid, err := line.Validate()
+	if !valid {
+		t.Error(err)
 	}
 }
