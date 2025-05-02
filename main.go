@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -14,19 +13,6 @@ import (
 	"github.com/campfhir/wsv/reader"
 	"github.com/campfhir/wsv/xpaths"
 )
-
-// printVersion prints the application version
-func version() string {
-	buildInfo, ok := debug.ReadBuildInfo()
-	if !ok {
-		return fmt.Sprintf("Version: unknown")
-	}
-
-	if buildInfo.Main.Version != "" {
-		return fmt.Sprintf("Version: %s\n", buildInfo.Main.Version)
-	}
-	return fmt.Sprintln("Version: unknown")
-}
 
 func main() {
 	var (
