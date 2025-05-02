@@ -29,17 +29,20 @@ var (
 // A ParseError is returned for parsing errors.
 // Line numbers are 1-indexed and columns are 0-indexed.
 type ParseError struct {
-	Line          int   // Line where the error occurred
-	Column        int   // Column (1-based byte index) where the error occurred
-	Err           error // The actual error
-	NeighborBytes []byte
+	Line           int   // Line where the error occurred
+	FieldPosition  int   // Column (1-based byte index) where the error occurred
+	Err            error // The actual error
+	Field          *record.Field
+	ColumnPosition int
+	RawLine        []byte
 }
 
 func (e *ParseError) Error() string {
 	if e.Err == ErrFieldCount {
 		return fmt.Sprintf("record on line %d: %v", e.Line, e.Err)
 	}
-	return fmt.Sprintf("parse error on line %d, column %d [%s]: %v", e.Line, e.Column, string(e.NeighborBytes), e.Err)
+
+	return fmt.Sprintf("%s\n%s\nparse error on line %d, column %d: %v", e.RawLine, stringPadLeft("^", e.ColumnPosition), e.Line, e.FieldPosition, e.Err)
 
 }
 
@@ -71,6 +74,15 @@ func columnName(headers []string, index int) string {
 		return ""
 	}
 	return strings.Clone(*v)
+}
+
+func stringPadLeft(str string, length int) string {
+	for {
+		str = " " + str
+		if utf8.RuneCountInString(str) >= length {
+			return str[0:length]
+		}
+	}
 }
 
 // Creates a new WSV NewReader
@@ -145,6 +157,8 @@ type lineField struct {
 	Value     string
 	IsComment bool
 	IsNull    bool
+	Col       int
+	RawLine   []byte
 }
 
 func parseLine(n int, line []byte) ([]lineField, error) {
@@ -192,10 +206,6 @@ lineLoop:
 
 		switch r {
 		case '\n':
-			if i < len(line)-1 {
-				d := neighborBytes(i, line)
-				return str, &ParseError{Line: n, Column: i, Err: ErrLineFeedTerm, NeighborBytes: d}
-			}
 			break lineLoop
 		case '#':
 			if !doubleQuoted {
@@ -205,7 +215,7 @@ lineLoop:
 				data = append(data, line[i+1:]...)
 				// since we are copying to the end of line we should remove the suffix of the line feed
 				data = bytes.TrimSuffix(data, []byte{'\n'})
-				str = append(str, lineField{IsComment: true, Value: string(data), IsNull: isNull})
+				str = append(str, lineField{IsComment: true, Value: string(data), IsNull: isNull, Col: i, RawLine: line})
 				// s = ""
 				data = []byte{}
 				break lineLoop
@@ -226,7 +236,7 @@ lineLoop:
 
 			if (b3 == nil || utils.IsFieldDelimiter(rune(*b3))) && b2 != nil && rune(*b2) == '"' && (len(line)-1 == i || (len(line)-1 > i && utils.IsFieldDelimiter(nextRune(line[i+1:])))) {
 				data = []byte{}
-				str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull})
+				str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull, Col: i, RawLine: line})
 				doubleQuoted = false
 				continue
 			}
@@ -253,7 +263,7 @@ lineLoop:
 				data = append(bytes.TrimSuffix(data, []byte{'/'}), byte('\n'))
 			}
 			if isNull && (len(line)-1 == i) {
-				str = append(str, lineField{IsComment: false, Value: "", IsNull: isNull})
+				str = append(str, lineField{IsComment: false, Value: "", IsNull: isNull, Col: i, RawLine: line})
 				break lineLoop
 			}
 			// currently flagged as null but has more characters left to parse and
@@ -263,7 +273,7 @@ lineLoop:
 					data = []byte{}
 				} else {
 					// and is not surround by double quotes we have an invalid
-					return str, &ParseError{Column: i, Err: ErrInvalidNull}
+					return str, &ParseError{FieldPosition: i, Err: ErrInvalidNull, ColumnPosition: i, Line: n, RawLine: line}
 				}
 
 			}
@@ -274,10 +284,9 @@ lineLoop:
 					continue
 				}
 				if string(data) == `"` {
-					nb := neighborBytes(i, line)
-					return str, &ParseError{Line: n, Err: ErrBareQuote, Column: i, NeighborBytes: nb}
+					return str, &ParseError{Line: n, Err: ErrBareQuote, FieldPosition: i, RawLine: line}
 				}
-				str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull})
+				str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull, Col: i, RawLine: line})
 				isNull = false
 				data = []byte{}
 				continue
@@ -292,38 +301,16 @@ lineLoop:
 	}
 	if doubleQuoted {
 		// the following string value could not be parsed correctly
-
-		nb := neighborBytes(startDoubleQuote, line)
-		return str, &ParseError{Column: startDoubleQuote, Err: ErrBareQuote, Line: n, NeighborBytes: nb}
+		return str, &ParseError{FieldPosition: startDoubleQuote, Err: ErrBareQuote, Line: n, RawLine: line, ColumnPosition: startDoubleQuote}
 	}
 	if len(data) > 0 {
 		if string(data) == `"` {
-			nb := neighborBytes(startDoubleQuote, line)
-			return str, &ParseError{Line: n, Err: ErrBareQuote, Column: startDoubleQuote, NeighborBytes: nb}
+			return str, &ParseError{Line: n, Err: ErrBareQuote, FieldPosition: startDoubleQuote, RawLine: line, ColumnPosition: startDoubleQuote}
 		}
-		str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull})
+		str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull, RawLine: line})
 
 	}
 	return str, nil
-}
-
-func neighborBytes(i int, line []byte) (neighbor []byte) {
-	if i < 0 {
-		return neighbor
-	}
-	p := 5 - (5 - i)
-	s := 5 - (5 - i)
-	if p > 5 {
-		p = 5
-	}
-	if s > 5 {
-		s = 5
-	}
-	if len(line[i:]) < i+s {
-		s = (len(line[i:]) - 1) + i
-	}
-	neighbor = line[p:s]
-	return neighbor
 }
 
 func bytesToString(s ...*byte) string {
@@ -399,7 +386,7 @@ func (r *Reader) Read() (Line, error) {
 			// comments must be the first and only value or the last value parsed, if preceding fields are not explicitly defined return an error
 			// the exception being non-tabular documents
 			if i < len(r.headers) && i != 0 && r.IsTabular {
-				return &line, &ParseError{Line: r.numLine, Column: 0, Err: ErrCommentPlacement}
+				return &line, &ParseError{Line: r.numLine, FieldPosition: i + 1, Err: ErrCommentPlacement, ColumnPosition: field.Col, RawLine: field.RawLine}
 			}
 			line.comment = field.Value
 			continue
@@ -407,7 +394,7 @@ func (r *Reader) Read() (Line, error) {
 		line.fieldCount++
 
 		if r.IsTabular && r.IncludesHeader && len(r.headers) < line.fieldCount {
-			return &line, &ParseError{Line: r.numLine, Column: 0, Err: ErrFieldCount}
+			return &line, &ParseError{Line: r.numLine, FieldPosition: i + 1, Err: ErrFieldCount}
 		}
 		fieldName := columnName(r.headers, i)
 		d := record.Field{Value: field.Value, FieldName: fieldName, IsHeader: false, RowIndex: r.numLine, FieldIndex: i, IsNull: false}

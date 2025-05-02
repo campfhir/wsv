@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	doc "github.com/campfhir/wsv/document"
 
@@ -594,8 +595,8 @@ func TestLiterallyDashValue(t *testing.T) {
 func TestParseInvalidDashValue(t *testing.T) {
 	line := `john -hungry	"hippo"`
 	_, err := parseLine(1, []byte(line))
-	if err.Error() != "parse error on line 0, column 5 []: null `-` specifier cannot be included without white space surrounding, unless it is the last value in the line. To record a literal `-` please wrap the value in double quotes" {
-		t.Error(err)
+	if err.Error() != "john -hungry	\"hippo\"\n"+stringPadLeft("^", utf8.RuneCountInString("john "))+"\nparse error on line 1, column 5: null `-` specifier cannot be included without white space surrounding, unless it is the last value in the line. To record a literal `-` please wrap the value in double quotes" {
+		t.Errorf("\n%v\n", err)
 	}
 }
 
@@ -751,8 +752,8 @@ func TestParseLineWithoutDoubleQuotes(t *testing.T) {
 func TestParseInvalidLine(t *testing.T) {
 	line := `john hungry "doe`
 	_, err := parseLine(1, []byte(line))
-	if err.Error() != `parse error on line 1, column 12 [hungry "do]: bare " in non-quoted-field` {
-		t.Error(err)
+	if err.Error() != "john hungry \"doe\n"+stringPadLeft("^", utf8.RuneCountInString(`john hungry `))+"\n"+`parse error on line 1, column 12: bare " in non-quoted-field` {
+		t.Errorf("\n%v\n", err)
 	}
 }
 
