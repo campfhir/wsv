@@ -1,3 +1,3 @@
 #! /bin/sh
-go build -o ./bin/cli cli/main.go
-chmod u+x ./bin/cli
+go build -o ./bin/wsv main.go
+chmod u+x ./bin/wsv

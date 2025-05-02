@@ -18,8 +18,8 @@ func main() {
 	var (
 		input      string
 		output     string
-		inputFile  *os.File = os.Stdin
-		outputFile *os.File = os.Stdout
+		inputFile  *os.File
+		outputFile *os.File
 		verify     bool
 		tabular    bool
 		sorting    string
@@ -49,6 +49,9 @@ func main() {
 			os.Exit(1)
 			return
 		}
+		defer inputFile.Close()
+	} else {
+		inputFile = os.Stdin
 	}
 
 	if output != "-" {
@@ -64,6 +67,7 @@ func main() {
 			os.Exit(1)
 			return
 		}
+		defer outputFile.Close()
 	} else {
 		outputFile = os.Stdout
 	}
