@@ -43,27 +43,28 @@ func (e *ParseError) Error() string {
 
 }
 
-// These are the errors that can be returned in ParseError.Err.
-
+// A WSV Document Reader
 type Reader struct {
 	numLine             int
 	offset              int64
 	rawBuffer           []byte
-	FieldsPerRecord     int
-	lines               []ReaderLine
+	lines               []Line
 	headers             []string
 	IncludesHeader      bool
 	IsTabular           bool
-	r                   *bufio.Reader
+	br                  *bufio.Reader
 	NullTrailingColumns bool
 	ended               bool
 	firstDataRow        int
 }
 
+// Returns a slice of headers for a WSV
 func (r *Reader) Headers() []string {
 	return r.headers
 }
 
+// Returns the column name for a given field index, if the index does not exists
+// an empty string is returned
 func columnName(headers []string, index int) string {
 	v, err := utils.GetIndexOfSlice(headers, index)
 	if err != nil {
@@ -72,13 +73,20 @@ func columnName(headers []string, index int) string {
 	return strings.Clone(*v)
 }
 
+// Creates a new WSV NewReader
+//
+// - By default the first non-empty and non-comment line is considered the header
+//
+// - By default it expects a tabular [each record has the same number of fields] document
+//
+// - By default omitted trailing fields for a record are allowed
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		r:                   bufio.NewReader(r),
+		br:                  bufio.NewReader(r),
 		IsTabular:           true,
 		IncludesHeader:      true,
 		NullTrailingColumns: true,
-		lines:               make([]ReaderLine, 0),
+		lines:               make([]Line, 0),
 		ended:               false,
 	}
 }
@@ -101,7 +109,12 @@ func (r *Reader) IndexedAt(n string) []int {
 
 }
 
-func Parse(wsvFile string) ([]ReaderLine, error) {
+// Takes a file path and attempts to read the document as a WSV document
+//
+// - Will attempt to parse using the default `NewReader()` and return slice of lines it was able to reader
+//
+// - Can return a *PathError or *ParseError
+func Parse(wsvFile string) ([]Line, error) {
 	file, err := os.Open(wsvFile)
 	if err != nil {
 		return nil, err
@@ -112,7 +125,10 @@ func Parse(wsvFile string) ([]ReaderLine, error) {
 	return records, err
 }
 
-func (r *Reader) ReadAll() (records []ReaderLine, err error) {
+// Will read all lines of a reader until it reaches the end of a file or *ParseError
+//
+// If `err == nil`, it has read the entire document successfully
+func (r *Reader) ReadAll() (records []Line, err error) {
 	for {
 		record, err := r.Read()
 		if err == io.EOF {
@@ -125,13 +141,13 @@ func (r *Reader) ReadAll() (records []ReaderLine, err error) {
 	}
 }
 
-type LineField struct {
+type lineField struct {
 	Value     string
 	IsComment bool
 	IsNull    bool
 }
 
-func ParseLine(n int, line []byte) ([]LineField, error) {
+func parseLine(n int, line []byte) ([]lineField, error) {
 	var b1 *byte = nil
 	var b2 *byte = nil
 	var b3 *byte = nil
@@ -143,7 +159,7 @@ func ParseLine(n int, line []byte) ([]LineField, error) {
 	startDoubleQuote := 0
 	escapedDoubleQuote := 0
 	data := []byte{}
-	str := make([]LineField, 0)
+	str := make([]lineField, 0)
 	// trim the trailing white space from the line
 	// line = bytes.TrimRightFunc(line, isFieldDelimiter)
 lineLoop:
@@ -189,7 +205,7 @@ lineLoop:
 				data = append(data, line[i+1:]...)
 				// since we are copying to the end of line we should remove the suffix of the line feed
 				data = bytes.TrimSuffix(data, []byte{'\n'})
-				str = append(str, LineField{IsComment: true, Value: string(data), IsNull: isNull})
+				str = append(str, lineField{IsComment: true, Value: string(data), IsNull: isNull})
 				// s = ""
 				data = []byte{}
 				break lineLoop
@@ -210,7 +226,7 @@ lineLoop:
 
 			if (b3 == nil || utils.IsFieldDelimiter(rune(*b3))) && b2 != nil && rune(*b2) == '"' && (len(line)-1 == i || (len(line)-1 > i && utils.IsFieldDelimiter(nextRune(line[i+1:])))) {
 				data = []byte{}
-				str = append(str, LineField{IsComment: false, Value: string(data), IsNull: isNull})
+				str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull})
 				doubleQuoted = false
 				continue
 			}
@@ -237,7 +253,7 @@ lineLoop:
 				data = append(bytes.TrimSuffix(data, []byte{'/'}), byte('\n'))
 			}
 			if isNull && (len(line)-1 == i) {
-				str = append(str, LineField{IsComment: false, Value: "", IsNull: isNull})
+				str = append(str, lineField{IsComment: false, Value: "", IsNull: isNull})
 				break lineLoop
 			}
 			// currently flagged as null but has more characters left to parse and
@@ -261,7 +277,7 @@ lineLoop:
 					nb := neighborBytes(i, line)
 					return str, &ParseError{Line: n, Err: ErrBareQuote, Column: i, NeighborBytes: nb}
 				}
-				str = append(str, LineField{IsComment: false, Value: string(data), IsNull: isNull})
+				str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull})
 				isNull = false
 				data = []byte{}
 				continue
@@ -285,7 +301,7 @@ lineLoop:
 			nb := neighborBytes(startDoubleQuote, line)
 			return str, &ParseError{Line: n, Err: ErrBareQuote, Column: startDoubleQuote, NeighborBytes: nb}
 		}
-		str = append(str, LineField{IsComment: false, Value: string(data), IsNull: isNull})
+		str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull})
 
 	}
 	return str, nil
@@ -325,24 +341,27 @@ func (r *Reader) CurrentRow() int {
 	return r.numLine
 }
 
-// Read a slice of RecordField from r.
-// If the reader IsTabular and the row being parsed has more
-// fields than the header row will return the records, ParseError
-// Read returns the record along with the error ParseError.
-// If the record contains a field that cannot be parsed,
-// Read returns a partial record along with the parse error.
+// Reads the current line of a reader and returns a *Line.
+//
+// - If `r.IsTabular == true` and the current line being parsed has more fields than amount of headers
+// `r.Read()` returns a the *Line along with the error *ParseError.
+//
+// - If the record contains a field that cannot be parsed,
+// `r.Read()` returns a *Line with as many records as it could before encountering an error.
 // The partial record contains all fields read before the error.
-// If there is no data left to be read, Read returns an empty RecordField slice, io.EOF.
-// Subsequent calls to Read after io.EOF returns an empty RecordFieldSlice, ErrReaderEnded
-func (r *Reader) Read() (ReaderLine, error) {
+//
+// - If there is no data left to be read, `r.Read()` returns a *Line with an empty slice Fields and io.EOF.
+//
+// - Subsequent calls to `r.Read()` after io.EOF returns a nil and ErrReaderEnded
+func (r *Reader) Read() (Line, error) {
 	var data []byte
 	var errRead error
-	line := readerLine{
-		fields:     make([]record.RecordField, 0),
-		fieldCount: 0,
-	}
 	if r.ended {
-		return &line, ErrReaderEnded
+		return nil, ErrReaderEnded
+	}
+	line := readerLine{
+		fields:     make([]record.Field, 0),
+		fieldCount: 0,
 	}
 	data, errRead = r.readLine()
 	if errRead == io.EOF {
@@ -351,7 +370,7 @@ func (r *Reader) Read() (ReaderLine, error) {
 	}
 	line.line = r.numLine
 
-	fields, errRead := ParseLine(r.numLine, data)
+	fields, errRead := parseLine(r.numLine, data)
 	if errRead != nil {
 		return &line, errRead
 	}
@@ -364,7 +383,7 @@ func (r *Reader) Read() (ReaderLine, error) {
 	for i, field := range fields {
 		if r.numLine == r.firstDataRow && r.IncludesHeader && !field.IsComment {
 			r.headers = append(r.headers, field.Value)
-			d := record.RecordField{Value: field.Value}
+			d := record.Field{Value: field.Value}
 			if field.IsNull {
 				d.IsNull = true
 			}
@@ -391,7 +410,7 @@ func (r *Reader) Read() (ReaderLine, error) {
 			return &line, &ParseError{Line: r.numLine, Column: 0, Err: ErrFieldCount}
 		}
 		fieldName := columnName(r.headers, i)
-		d := record.RecordField{Value: field.Value, FieldName: fieldName, IsHeader: false, RowIndex: r.numLine, FieldIndex: i, IsNull: false}
+		d := record.Field{Value: field.Value, FieldName: fieldName, IsHeader: false, RowIndex: r.numLine, FieldIndex: i, IsNull: false}
 		if field.IsNull {
 			d.IsNull = true
 			d.Value = ""
@@ -413,7 +432,7 @@ func (r *Reader) Read() (ReaderLine, error) {
 		for i := range x {
 			h := o + i
 			cname := columnName(r.headers, h)
-			rec := record.RecordField{IsNull: true, Value: "", FieldIndex: h, RowIndex: r.numLine, FieldName: cname, IsHeader: false}
+			rec := record.Field{IsNull: true, Value: "", FieldIndex: h, RowIndex: r.numLine, FieldName: cname, IsHeader: false}
 			line.fields = append(line.fields, rec)
 			line.fieldCount++
 		}
@@ -428,12 +447,13 @@ func nextRune(b []byte) rune {
 	return r
 }
 
+// Reads the current line into a slice bytes
 func (r *Reader) readLine() ([]byte, error) {
-	line, err := r.r.ReadSlice(utils.CharLineFeed)
+	line, err := r.br.ReadSlice(utils.CharLineFeed)
 	if err == bufio.ErrBufferFull {
 		r.rawBuffer = append(r.rawBuffer[:0], line...)
 		for err == bufio.ErrBufferFull {
-			line, err = r.r.ReadSlice(utils.CharLineFeed)
+			line, err = r.br.ReadSlice(utils.CharLineFeed)
 			r.rawBuffer = append(r.rawBuffer, line...)
 		}
 		line = r.rawBuffer
@@ -457,10 +477,11 @@ func (r *Reader) readLine() ([]byte, error) {
 	return line, err
 }
 
+// Takes a reader an turns that into a document
 func (r *Reader) ToDocument() (*doc.Document, error) {
 	doc := doc.NewDocument()
 	var err error
-	var rl ReaderLine
+	var rl Line
 	for {
 		rl, err = r.Read()
 		if err == io.EOF {

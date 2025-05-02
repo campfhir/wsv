@@ -11,8 +11,8 @@ var (
 	ErrEndOfLine     = errors.New("no more fields left in this line")
 )
 
-type ReaderLine interface {
-	Field(fi int) (*record.RecordField, error)
+type Line interface {
+	Field(fi int) (*record.Field, error)
 	// Get the value of comment for the line
 	Comment() string
 	// Get the line number
@@ -20,13 +20,13 @@ type ReaderLine interface {
 	// A count of the number of data fields in the line
 	FieldCount() int
 	// Get the next field value, or error if at the end of the line for data
-	NextField() (*record.RecordField, error)
+	NextField() (*record.Field, error)
 	// Returns true if the line is a slice of headers
 	IsHeaderLine() bool
 }
 
 type readerLine struct {
-	fields  []record.RecordField
+	fields  []record.Field
 	comment string
 	// Lines are 1-indexed
 	line int
@@ -36,7 +36,7 @@ type readerLine struct {
 	isHeaderLine bool
 }
 
-func (line *readerLine) NextField() (*record.RecordField, error) {
+func (line *readerLine) NextField() (*record.Field, error) {
 	if len(line.fields)-1 < line.currentField {
 		return nil, ErrEndOfLine
 	}
@@ -54,7 +54,7 @@ func (line *readerLine) LineNumber() int {
 	return line.line
 }
 
-func (line *readerLine) Field(fieldIndex int) (*record.RecordField, error) {
+func (line *readerLine) Field(fieldIndex int) (*record.Field, error) {
 	if len(line.fields)-1 < fieldIndex {
 		return nil, ErrFieldNotFound
 	}

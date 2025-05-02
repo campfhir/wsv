@@ -18,20 +18,23 @@ func main() {
 	var (
 		input      string
 		output     string
-		inputFile  *os.File
-		outputFile *os.File
+		inputFile  *os.File = os.Stdin
+		outputFile *os.File = os.Stdout
 		verify     bool
 		tabular    bool
 		sorting    string
 	)
 	flag.StringVar(&input, "input", "-", "input file, use `-` for stdin (default stdin)")
 	flag.StringVar(&input, "i", "-", "input file, use `-` for stdin (default stdin)")
+	flag.StringVar(&input, "file", "-", "input file, use `-` for stdin (default stdin)")
+	flag.StringVar(&input, "f", "-", "input file, use `-` for stdin (default stdin)")
 	flag.StringVar(&output, "output", "-", "output file, use `-` for stdout (default stdout)")
 	flag.StringVar(&output, "o", "-", "output file, use `-` for stdout (default stdout)")
 	flag.StringVar(&sorting, "sort", "", "sort by column(s) seperated by `;` will be sorted in the order provided, can use `::` modifier followed by asc or desc to specify direction (defaults asc)")
 	flag.StringVar(&sorting, "s", "", "sort by column(s) seperated by `;` will be sorted in the order provided, can use `::` modifier followed by asc or desc to specify direction (defaults asc)")
 	flag.BoolVar(&tabular, "tabular", true, "specify if a document is tabular or not")
 	flag.BoolVar(&verify, "verify", false, "verify that input is valid wsv")
+	flag.BoolVar(&verify, "v", false, "verify that input is valid wsv")
 	flag.Parse()
 	if input != "-" {
 		inputPath, err := xpaths.Resolve(input)

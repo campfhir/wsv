@@ -55,7 +55,7 @@ func (e *WriteError) Error() string {
 type Document struct {
 	Tabular          bool
 	EmitHeaders      bool
-	lines            []DocumentLine
+	lines            []Line
 	maxColumnWidth   map[int]int
 	padding          []rune
 	currentWriteLine int
@@ -81,7 +81,7 @@ type appendLineField struct {
 	isNull bool
 }
 
-func (d *Document) Lines() []DocumentLine {
+func (d *Document) Lines() []Line {
 	return d.lines
 }
 
@@ -98,7 +98,7 @@ func Null() appendLineField {
 // the literally "-" will be interpreded as null,  if you need a literal "-" use the `line.Append(val string)` function
 //
 // returns the line that was added, can return an error due validation errors
-func (doc *Document) AppendValues(vals ...string) (DocumentLine, error) {
+func (doc *Document) AppendValues(vals ...string) (Line, error) {
 	line, err := doc.AddLine()
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (doc *Document) AppendValues(vals ...string) (DocumentLine, error) {
 	return line, nil
 }
 
-func (doc *Document) AppendLine(fields ...appendLineField) (DocumentLine, error) {
+func (doc *Document) AppendLine(fields ...appendLineField) (Line, error) {
 	line, err := doc.AddLine()
 	if err != nil {
 		return nil, err
@@ -139,14 +139,14 @@ func (doc *Document) AppendLine(fields ...appendLineField) (DocumentLine, error)
 	return line, nil
 }
 
-func (doc *Document) AddLine() (DocumentLine, error) {
+func (doc *Document) AddLine() (Line, error) {
 	if doc.startedWriting {
 		return nil, &WriteError{err: ErrStartedToWrite, line: doc.currentWriteLine}
 	}
 	pln := len(doc.lines)
 	line := documentLine{
 		doc:    doc,
-		fields: make([]record.RecordField, 0),
+		fields: make([]record.Field, 0),
 		line:   pln + 1,
 	}
 
@@ -156,7 +156,7 @@ func (doc *Document) AddLine() (DocumentLine, error) {
 }
 
 // evaluates previous and current record fields and should return true if current field is after previous field
-type SortFunc = func(prv *record.RecordField, curr *record.RecordField) bool
+type SortFunc = func(prv *record.Field, curr *record.Field) bool
 
 func Sort(fieldName string) *internal.SortOption {
 	return &internal.SortOption{FieldName: fieldName}
@@ -208,7 +208,7 @@ func (doc *Document) SortBy(sortOptions ...*internal.SortOption) error {
 		if sort == nil {
 			continue
 		}
-		slices.SortStableFunc(doc.lines, func(cur DocumentLine, next DocumentLine) int {
+		slices.SortStableFunc(doc.lines, func(cur Line, next Line) int {
 			if cur.IsHeader() {
 				return -1
 			}
@@ -245,7 +245,7 @@ func (doc *Document) SortBy(sortOptions ...*internal.SortOption) error {
 //	-1 when line[Field].Value < cmpLine[Field].Value or line[Field].Value is nil
 //	 0 when line[Field].Value == cmpLine[Field].Value
 //	+1 when line[Field].Value > cmpLine[Field].Value or cmpLine[Field].Value is nil
-func sortFieldsColumn(opt *internal.SortOption, a *record.RecordField, b *record.RecordField) int {
+func sortFieldsColumn(opt *internal.SortOption, a *record.Field, b *record.Field) int {
 
 	if opt.AsTime {
 		order := sortTimeColumn(opt, a, b)
@@ -281,7 +281,7 @@ func sortFieldsColumn(opt *internal.SortOption, a *record.RecordField, b *record
 	return order
 }
 
-func sortNumbersColumn(opt *internal.SortOption, a *record.RecordField, b *record.RecordField) int {
+func sortNumbersColumn(opt *internal.SortOption, a *record.Field, b *record.Field) int {
 	if a == nil || a.IsNull {
 		return +1
 	}
@@ -302,7 +302,7 @@ func sortNumbersColumn(opt *internal.SortOption, a *record.RecordField, b *recor
 	return 0
 }
 
-func sortTimeColumn(opt *internal.SortOption, a *record.RecordField, b *record.RecordField) int {
+func sortTimeColumn(opt *internal.SortOption, a *record.Field, b *record.Field) int {
 	if a == nil || a.IsNull {
 		return +1
 	}
@@ -322,7 +322,7 @@ func sortTimeColumn(opt *internal.SortOption, a *record.RecordField, b *record.R
 
 // Returns the document at the ln specified. Lines are 1-index. If the line does not exist there is an
 // ErrLineNotFound error
-func (doc *Document) Line(ln int) (DocumentLine, error) {
+func (doc *Document) Line(ln int) (Line, error) {
 	if len(doc.lines)-1 < ln-1 || ln < 1 {
 		return nil, ErrLineNotFound
 	}
@@ -579,7 +579,7 @@ func NewDocument() *Document {
 	doc := Document{
 		Tabular:          true,
 		EmitHeaders:      true,
-		lines:            make([]DocumentLine, 0),
+		lines:            make([]Line, 0),
 		currentWriteLine: 0,
 		currentField:     0,
 		maxColumnWidth:   make(map[int]int, 0),

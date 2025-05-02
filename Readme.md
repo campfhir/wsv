@@ -8,7 +8,9 @@ This is an implementation of WSV in Go as described by [https://github.com/Stenw
 go get github.com/campfhir/wsv
 ```
 
-## Reading Usage
+## Package Usages
+
+### Reading File
 
 When using the reader you can read line by line, `Read()` or use the convenient `ReadAll()` function which reads all lines into a slice of rows of records/fields.
 
@@ -59,7 +61,7 @@ lineLoop:
 
 ```
 
-## Writing Usage
+### Writing
 
 When writing a document can be done with a few APIs. Below is a sample application.
 
@@ -101,3 +103,15 @@ func main() {
    }
 }
 ```
+
+## CLI Usage
+
+A CLI is included to help with formatting and verifying a WSV document.
+
+| Command/Option                    | Description                                                                                                                                              |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| -i<br />-input<br />-f<br />-file | input file, use - for stdin (default stdin) (default "-")                                                                                                |
+| -o<br />-output                   | output file, use - for stdout (default stdout) (default "-")                                                                                             |
+| -s<br />-sort                     | sort by column(s) seperated by ; will be sorted in the order provided, can use `::` modifier followed by asc or desc to specify direction (defaults asc) |
+| -tabular                          | specify if a document is tabular or not. [Tabular means each record/line has the same number of fields] (default true)                                   |
+| -v<br />-verify                   | verify that input is valid wsv                                                                                                                           |

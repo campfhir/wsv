@@ -8,7 +8,7 @@ import (
 	"github.com/campfhir/wsv/utils"
 )
 
-type RecordField struct {
+type Field struct {
 	IsNull     bool
 	Value      string
 	FieldIndex int
@@ -17,12 +17,20 @@ type RecordField struct {
 	IsHeader   bool
 }
 
-func (f *RecordField) CalculateFieldLength() int {
+// Computes the rune length of the serialized value
+func (f *Field) CalculateFieldLength() int {
 	v := f.SerializeText()
 	return utf8.RuneCountInString(v)
 }
 
-func (f *RecordField) SerializeText() string {
+// Serializes the values of the field
+//
+// - escaping whitespaces, double quoutes, and hyphens from the records value
+//
+// - returns the literal `-` character for null
+//
+// - `""` for an empty string
+func (f *Field) SerializeText() string {
 	wrapped := false
 	if f.IsNull {
 		return "-"

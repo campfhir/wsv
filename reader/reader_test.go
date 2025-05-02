@@ -1,4 +1,4 @@
-package reader_test
+package reader
 
 import (
 	"fmt"
@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	doc "github.com/campfhir/wsv/document"
-	"github.com/campfhir/wsv/reader"
 
 	"github.com/campfhir/wsv/utils"
 )
@@ -19,7 +18,7 @@ func toPointer[t any](a t) *t {
 
 func TestQuotedValuesLine(t *testing.T) {
 	line := `"Given Name" "Family Name" "Date of Birth" "Favorite Color"`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -93,7 +92,7 @@ func TestIsEmptyStringLiteral(t *testing.T) {
 
 func TestEmptyStringLiteral(t *testing.T) {
 	line := `India						""					🇮🇳			  -`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -122,7 +121,7 @@ func TestReadColumnAndDataWithSpaces(t *testing.T) {
 	lines = append(lines, `"Mary Jane" "Vasquez Rojas" "Feb 02 2021" "Midnight Grey"`)
 	file := strings.Join(lines, string('\n'))
 	str := strings.NewReader(file)
-	r := reader.NewReader(str)
+	r := NewReader(str)
 	line, err := r.Read()
 
 	if err != nil {
@@ -178,7 +177,7 @@ func TestReadColumnAndDataWithSpaces(t *testing.T) {
 }
 
 func TestParseDataWithEmoji(t *testing.T) {
-	fields, err := reader.ParseLine(1, []byte("France						Paris	            🇫🇷			  \"The Eiffel Tower was built for the 1889 World's Fair.\"/\"It was almost torn down afterwards.\""))
+	fields, err := parseLine(1, []byte("France						Paris	            🇫🇷			  \"The Eiffel Tower was built for the 1889 World's Fair.\"/\"It was almost torn down afterwards.\""))
 	if err != nil {
 		t.Error(err)
 		return
@@ -213,7 +212,7 @@ func TestReadColumnAndDataWithoutSpaces(t *testing.T) {
 	lines = append(lines, `jane smith 2024-01-01 F`)
 	file := strings.Join(lines, string('\n'))
 	str := strings.NewReader(file)
-	r := reader.NewReader(str)
+	r := NewReader(str)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -272,7 +271,7 @@ func TestReadColumnAndDataWithComments(t *testing.T) {
 	lines = append(lines, `#this is a comment`)
 	file := strings.Join(lines, string('\n'))
 	str := strings.NewReader(file)
-	r := reader.NewReader(str)
+	r := NewReader(str)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -354,7 +353,7 @@ func TestParseWithEmptyLinesAndComments(t *testing.T) {
 	lines = append(lines, `#this is a comment`)
 	file := strings.Join(lines, string('\n'))
 	str := strings.NewReader(file)
-	r := reader.NewReader(str)
+	r := NewReader(str)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -461,7 +460,7 @@ func TestParseWithEmptyLinesAndComments(t *testing.T) {
 
 func TestParseLineWithComments(t *testing.T) {
 	line := `john "hungry ""doe""" #this is a valid comment`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -476,7 +475,7 @@ func TestParseLineWithComments(t *testing.T) {
 
 func TestParseLineWithNewLine(t *testing.T) {
 	line := `john "hungry"/"doe" #this is a valid comment`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -494,7 +493,7 @@ func TestParseLineWithNewLine(t *testing.T) {
 
 func TestParseLineWithTrailingNewLineFollowedBySpace(t *testing.T) {
 	line := `john "hungry"/"doe"/" " #this is a valid comment`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -512,7 +511,7 @@ func TestParseLineWithTrailingNewLineFollowedBySpace(t *testing.T) {
 
 func TestParseLineWithNewLineAndEscapedDoubleQuotes(t *testing.T) {
 	line := `john "hungry"""/"""doe" #this is a valid comment`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -530,7 +529,7 @@ func TestParseLineWithNewLineAndEscapedDoubleQuotes(t *testing.T) {
 
 func TestQuotedValuesStartWith(t *testing.T) {
 	line := `"john" "hungry" "hippo"`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -551,7 +550,7 @@ func TestQuotedValuesStartWith(t *testing.T) {
 
 func TestParseLineNullEndValue(t *testing.T) {
 	line := `john hungry	-`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -573,7 +572,7 @@ func TestParseLineNullEndValue(t *testing.T) {
 
 func TestLiterallyDashValue(t *testing.T) {
 	line := `"john-smith" hungry hippo`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -594,7 +593,7 @@ func TestLiterallyDashValue(t *testing.T) {
 
 func TestParseInvalidDashValue(t *testing.T) {
 	line := `john -hungry	"hippo"`
-	_, err := reader.ParseLine(1, []byte(line))
+	_, err := parseLine(1, []byte(line))
 	if err.Error() != "parse error on line 0, column 5 []: null `-` specifier cannot be included without white space surrounding, unless it is the last value in the line. To record a literal `-` please wrap the value in double quotes" {
 		t.Error(err)
 	}
@@ -602,7 +601,7 @@ func TestParseInvalidDashValue(t *testing.T) {
 
 func TestParseInvalidDashInLastField(t *testing.T) {
 	line := `john hungry -hippo`
-	_, err := reader.ParseLine(1, []byte(line))
+	_, err := parseLine(1, []byte(line))
 	if err == nil {
 		t.Error("expected this to throw an error")
 	}
@@ -610,7 +609,7 @@ func TestParseInvalidDashInLastField(t *testing.T) {
 
 func TestParseBareDoubleQuote(t *testing.T) {
 	line := `India						"""					🇮🇳			  -`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err == nil {
 		t.Error("Should have returned a bare double quote error", r)
 		return
@@ -619,7 +618,7 @@ func TestParseBareDoubleQuote(t *testing.T) {
 
 func TestParseBareDoubleQuoteLastChar(t *testing.T) {
 	line := `India						"""`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err == nil {
 		t.Error("Should have returned a bare double quote error", "["+r[1].Value+"]")
 		return
@@ -628,7 +627,7 @@ func TestParseBareDoubleQuoteLastChar(t *testing.T) {
 
 func TestParseLineNullMiddleValue(t *testing.T) {
 	line := `john -	hippo`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -650,7 +649,7 @@ func TestParseLineNullMiddleValue(t *testing.T) {
 
 func TestParseLineNullValue(t *testing.T) {
 	line := `- hungry	hippo`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -671,7 +670,7 @@ func TestParseLineNullValue(t *testing.T) {
 
 func TestParseTabs(t *testing.T) {
 	line := `john	"hungry ""doe"""	#this is a valid comment`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -686,7 +685,7 @@ func TestParseTabs(t *testing.T) {
 
 func TestParseWithHashSignInData(t *testing.T) {
 	line := `john "hungry# ""doe"""`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -704,7 +703,7 @@ func TestParseWithHashSignInData(t *testing.T) {
 
 func TestParseLineWithDoubleQuotes(t *testing.T) {
 	line := `john "hungry ""doe"""`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -722,7 +721,7 @@ func TestParseLineWithDoubleQuotes(t *testing.T) {
 
 func TestParseLineWithStartingDoubleQuotes(t *testing.T) {
 	line := `john """hungry"""`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -740,7 +739,7 @@ func TestParseLineWithStartingDoubleQuotes(t *testing.T) {
 
 func TestParseLineWithoutDoubleQuotes(t *testing.T) {
 	line := `john hungry doe`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -751,7 +750,7 @@ func TestParseLineWithoutDoubleQuotes(t *testing.T) {
 
 func TestParseInvalidLine(t *testing.T) {
 	line := `john hungry "doe`
-	_, err := reader.ParseLine(1, []byte(line))
+	_, err := parseLine(1, []byte(line))
 	if err.Error() != `parse error on line 1, column 12 [hungry "do]: bare " in non-quoted-field` {
 		t.Error(err)
 	}
@@ -759,7 +758,7 @@ func TestParseInvalidLine(t *testing.T) {
 
 func TestParseComplexDoubleQuoteLine(t *testing.T) {
 	line := `"""fName""s" """lName""" """dob""" """gender"""`
-	fields, err := reader.ParseLine(1, []byte(line))
+	fields, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -771,7 +770,7 @@ func TestParseComplexDoubleQuoteLine(t *testing.T) {
 
 func TestParseEmptyComment(t *testing.T) {
 	line := `john hungry #`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -782,7 +781,7 @@ func TestParseEmptyComment(t *testing.T) {
 
 func TestParseCommentWithJustSpaces(t *testing.T) {
 	line := `john hungry #      `
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -798,7 +797,7 @@ func TestReadColumnAndDataWithDoubleQuotes(t *testing.T) {
 	lines = append(lines, `jane smith 2024-01-01 F`)
 	file := strings.Join(lines, string('\n'))
 	str := strings.NewReader(file)
-	r := reader.NewReader(str)
+	r := NewReader(str)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -857,7 +856,7 @@ func TestNullRemainingColumns(t *testing.T) {
 	lines = append(lines, `jane smith 2024-01-01`)
 	file := strings.Join(lines, string('\n'))
 	str := strings.NewReader(file)
-	r := reader.NewReader(str)
+	r := NewReader(str)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -910,7 +909,7 @@ func TestNullRemainingColumns(t *testing.T) {
 
 func TestParseLineStartsWithNewLineAndEscapedDoubleQuotes(t *testing.T) {
 	line := `john ""/"hungry"""/"""doe"/"" #this is a valid comment`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 
 		t.Error(err)
@@ -929,7 +928,7 @@ func TestParseLineStartsWithNewLineAndEscapedDoubleQuotes(t *testing.T) {
 
 func TestParseLineWithNewLineAtEndOfValueAndEscapedDoubleQuotes(t *testing.T) {
 	line := `john "hungry"""/"""doe"/"" #this is a valid comment`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 
 		t.Error(err)
@@ -948,7 +947,7 @@ func TestParseLineWithNewLineAtEndOfValueAndEscapedDoubleQuotes(t *testing.T) {
 
 func TestParseLineWithNewLineAtEndOfValueFollowedByASpaceAndEscapedDoubleQuotes(t *testing.T) {
 	line := `john " hungry"""/"""doe"/" " #this is a valid comment`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 	}
@@ -966,7 +965,7 @@ func TestParseLineWithNewLineAtEndOfValueFollowedByASpaceAndEscapedDoubleQuotes(
 
 func TestNewLineParsing(t *testing.T) {
 	line := `"john"       "doe"       "favorite colors:"/"red"/"blue"/"green"`
-	r, err := reader.ParseLine(1, []byte(line))
+	r, err := parseLine(1, []byte(line))
 	exp := "favorite colors:" + string('\n') + "red" + string('\n') + "blue" + string('\n') + "green"
 	if err != nil {
 		t.Error(err)
@@ -992,7 +991,7 @@ func TestReadDataWithNewLineInValue(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -1059,7 +1058,7 @@ func TestReadDataWithSpaces(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -1135,7 +1134,7 @@ func TestReadDataWithoutSpace(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -1211,7 +1210,7 @@ func TestReadOmittedColumnsToNull(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -1287,7 +1286,7 @@ func TestReadSimpleWithTabs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -1408,7 +1407,7 @@ func TestReadWithComments(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -1512,7 +1511,7 @@ func TestReadWithCEmptyLinesAndComments(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -1648,7 +1647,7 @@ func TestReadInvalidCommentPlacementDueToOmittedFields(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -1714,7 +1713,7 @@ func TestReadComplexValues(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -2519,14 +2518,14 @@ func TestReadComplexValues(t *testing.T) {
 	}
 
 	_, err = r.Read()
-	if err != reader.ErrReaderEnded {
+	if err != ErrReaderEnded {
 		t.Error("expected an error ErrReaderEnded")
 	}
 }
 
 func TestParseLineTrailingWhiteSpace(t *testing.T) {
 	line := `Mexico						"Mexico City"		🇲🇽			  -	`
-	fields, err := reader.ParseLine(1, []byte(line))
+	fields, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 		return
@@ -2552,7 +2551,7 @@ func TestParseLineTrailingWhiteSpace(t *testing.T) {
 
 func TestParseLineWithEmojisAndEscapedDoubleQuotesSurroundedByWhitespace(t *testing.T) {
 	line := `"United States of America"  "Washington D.C." 	"🇺🇸 🏴‍☠️"           "The United States of America is a federal republic with ""50"" states."`
-	fields, err := reader.ParseLine(1, []byte(line))
+	fields, err := parseLine(1, []byte(line))
 	if err != nil {
 		t.Error(err)
 		return
@@ -2582,7 +2581,7 @@ func TestReaderToDocument(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	doc, err := r.ToDocument()
 	if err != nil {
 		t.Error(err)
@@ -2655,7 +2654,7 @@ func TestWriteComplexLine(t *testing.T) {
 	strs = append(strs, `Country						Capital    	        "Emoji of Flag" "Interesting Facts" 																								#facts generated from Google's Gemini 2024-04-24`)
 	strs = append(strs, `Japan						Tokyo				🇯🇵🇯🇵			"Japan is a volcanic archipelago with over 100 active volcanoes."/"The currency is the yen and the symbol is ¥."   #has half-width characters`)
 
-	r := reader.NewReader(strings.NewReader(strings.Join(strs, "\n")))
+	r := NewReader(strings.NewReader(strings.Join(strs, "\n")))
 
 	lines, err := r.ReadAll()
 	if err != nil {
@@ -2721,7 +2720,7 @@ func TestReadingAndSortingNumberFields(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	r := reader.NewReader(file)
+	r := NewReader(file)
 	d, err := r.ToDocument()
 	if err != nil {
 		t.Error(err)

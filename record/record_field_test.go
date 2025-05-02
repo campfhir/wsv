@@ -7,7 +7,7 @@ import (
 )
 
 func TestSerializeText(t *testing.T) {
-	rec1 := record.RecordField{
+	rec1 := record.Field{
 		Value: "Japan is a volcanic archipelago with over 100 active volcanoes.\nThe currency is the yen and the symbol is ¥.",
 	}
 	exp1 := `"Japan is a volcanic archipelago with over 100 active volcanoes."/"The currency is the yen and the symbol is ¥."`
@@ -20,7 +20,7 @@ func TestSerializeText(t *testing.T) {
 		t.Error(cal1)
 	}
 
-	rec2 := record.RecordField{
+	rec2 := record.Field{
 		Value: "Would you've guessed that vodka or gin tops the list? For years, Jinro Soju has been the world's best-selling alcohol! It might not be surprising, given that with 11.2 shots on average, Koreans are also the world's biggest consumer of hard liquor. Haven't been able to try it yet? Time to visit Korea!",
 	}
 	exp2 := `"Would you've guessed that vodka or gin tops the list? For years, Jinro Soju has been the world's best-selling alcohol! It might not be surprising, given that with 11.2 shots on average, Koreans are also the world's biggest consumer of hard liquor. Haven't been able to try it yet? Time to visit Korea!"`
