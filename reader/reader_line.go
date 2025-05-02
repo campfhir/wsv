@@ -3,6 +3,7 @@ package reader
 import (
 	"errors"
 
+	"github.com/campfhir/wsv/internal"
 	"github.com/campfhir/wsv/record"
 )
 
@@ -23,6 +24,8 @@ type Line interface {
 	NextField() (*record.Field, error)
 	// Returns true if the line is a slice of headers
 	IsHeaderLine() bool
+	// Returns serialized values of all fields on a line
+	FieldsValues() []string
 }
 
 type readerLine struct {
@@ -71,4 +74,11 @@ func (line *readerLine) IsHeaderLine() bool {
 
 func (line *readerLine) UpdateComment(val string) {
 	line.comment = val
+}
+
+func (line *readerLine) FieldsValues() []string {
+	return internal.Map(line.fields,
+		func(e record.Field, i int, a []record.Field) string {
+			return e.SerializeText()
+		})
 }

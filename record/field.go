@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/campfhir/wsv/internal"
 	"github.com/campfhir/wsv/utils"
 )
 
@@ -31,11 +32,31 @@ func (f *Field) CalculateFieldLength() int {
 //
 // - `""` for an empty string
 func (f *Field) SerializeText() string {
-	wrapped := false
 	if f.IsNull {
 		return "-"
 	}
-	v := f.Value
+
+	return SerializeValue(f.Value)
+}
+
+// Maps the `SerializeValue()` function on non-null strings
+//
+// - escaping whitespaces, double quoutes, and hyphens from the records value
+//
+// - `""` for an empty string
+func SerializeValues(s []string) []string {
+	return internal.Map(s, func(e string, i int, a []string) string {
+		return SerializeValue(e)
+	})
+}
+
+// Seralizes non null values
+//
+// - escaping whitespaces, double quoutes, and hyphens from the records value
+//
+// - `""` for an empty string
+func SerializeValue(v string) string {
+	wrapped := false
 
 	v = strings.ReplaceAll(v, `"`, `""`)
 	if strings.Contains(v, `""`) && !wrapped {

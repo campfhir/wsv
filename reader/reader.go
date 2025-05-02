@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	doc "github.com/campfhir/wsv/document"
+	"github.com/campfhir/wsv/internal"
 	"github.com/campfhir/wsv/record"
 	"github.com/campfhir/wsv/utils"
 )
@@ -26,6 +27,37 @@ var (
 	ErrCommentPlacement = errors.New("comments should be the last elements in a row, if immediate preceding lines are null, they cannot be omitted and must be explicitly declared")
 )
 
+type InvalidFieldCountError struct {
+	Line    int
+	RawLine []byte
+	Headers []string
+	Fields  []string
+}
+
+func (e *InvalidFieldCountError) Error() string {
+	v := "values"
+	i := "are"
+
+	if len(e.Fields) > len(e.Headers) {
+		extra := len(e.Fields) - (len(e.Fields) - len(e.Headers))
+		xtra := e.Fields[extra:]
+		if len(xtra) == 1 {
+			v = "value"
+			i = "is"
+		}
+		return fmt.Sprintf("record on line %d: does not have the correct field count, has %d/%d, the %s (%s) %s extra", e.Line, len(e.Fields), len(e.Headers), v, strings.Join(xtra, ", "), i)
+	}
+	missing := len(e.Headers) - (len(e.Headers) - len(e.Fields))
+	headers := e.Headers[missing:]
+	h := "headers"
+	if len(headers) == 1 {
+		v = "value"
+		i = "is"
+		h = "header"
+	}
+	return fmt.Sprintf("record on line %d: does not have the correct field count, has %d/%d, the %s for the %s (%s) %s missing", e.Line, len(e.Fields), len(e.Headers), v, h, strings.Join(record.SerializeValues(headers), "\t"), i)
+}
+
 // A ParseError is returned for parsing errors.
 // Line numbers are 1-indexed and columns are 0-indexed.
 type ParseError struct {
@@ -38,12 +70,18 @@ type ParseError struct {
 }
 
 func (e *ParseError) Error() string {
-	if e.Err == ErrFieldCount {
-		return fmt.Sprintf("record on line %d: %v", e.Line, e.Err)
-	}
-
 	return fmt.Sprintf("%s\n%s\nparse error on line %d, column %d: %v", e.RawLine, stringPadLeft("^", e.ColumnPosition), e.Line, e.FieldPosition, e.Err)
+}
 
+type ParseErrorCollection struct {
+	Errs []error
+}
+
+func (e *ParseErrorCollection) Error() string {
+	strs := internal.Map(e.Errs, func(x error, i int, a []error) string {
+		return x.Error()
+	})
+	return strings.Join(strs, "\n")
 }
 
 // A WSV Document Reader
@@ -59,6 +97,7 @@ type Reader struct {
 	NullTrailingColumns bool
 	ended               bool
 	firstDataRow        int
+	AllowPartialError   bool
 }
 
 // Returns a slice of headers for a WSV
@@ -97,7 +136,7 @@ func NewReader(r io.Reader) *Reader {
 		br:                  bufio.NewReader(r),
 		IsTabular:           true,
 		IncludesHeader:      true,
-		NullTrailingColumns: true,
+		NullTrailingColumns: false,
 		lines:               make([]Line, 0),
 		ended:               false,
 	}
@@ -141,13 +180,17 @@ func Parse(wsvFile string) ([]Line, error) {
 //
 // If `err == nil`, it has read the entire document successfully
 func (r *Reader) ReadAll() (records []Line, err error) {
+	errs := make([]error, 0)
 	for {
 		record, err := r.Read()
 		if err == io.EOF {
+			if len(errs) > 0 {
+				return records, &ParseErrorCollection{Errs: errs}
+			}
 			return records, nil
 		}
 		if err != nil {
-			return nil, err
+			errs = append(errs, err)
 		}
 		records = append(records, record)
 	}
@@ -367,6 +410,7 @@ func (r *Reader) Read() (Line, error) {
 			line.isHeaderLine = true
 		}
 	}
+
 	for i, field := range fields {
 		if r.numLine == r.firstDataRow && r.IncludesHeader && !field.IsComment {
 			r.headers = append(r.headers, field.Value)
@@ -394,8 +438,20 @@ func (r *Reader) Read() (Line, error) {
 		line.fieldCount++
 
 		if r.IsTabular && r.IncludesHeader && len(r.headers) < line.fieldCount {
-			return &line, &ParseError{Line: r.numLine, FieldPosition: i + 1, Err: ErrFieldCount}
+			extraFields := internal.Map(fields[i:], func(e lineField, i int, _ []lineField) string {
+				if e.IsNull {
+					return "-"
+				}
+				return record.SerializeValue(e.Value)
+			})
+			return &line, &InvalidFieldCountError{
+				Fields:  append(line.FieldsValues(), extraFields...),
+				Headers: r.headers,
+				Line:    line.line,
+				RawLine: data,
+			}
 		}
+
 		fieldName := columnName(r.headers, i)
 		d := record.Field{Value: field.Value, FieldName: fieldName, IsHeader: false, RowIndex: r.numLine, FieldIndex: i, IsNull: false}
 		if field.IsNull {
@@ -422,6 +478,14 @@ func (r *Reader) Read() (Line, error) {
 			rec := record.Field{IsNull: true, Value: "", FieldIndex: h, RowIndex: r.numLine, FieldName: cname, IsHeader: false}
 			line.fields = append(line.fields, rec)
 			line.fieldCount++
+		}
+	}
+	if r.IsTabular && r.IncludesHeader && !r.NullTrailingColumns && len(r.headers) > line.fieldCount {
+		return &line, &InvalidFieldCountError{
+			Fields:  line.FieldsValues(),
+			Headers: r.headers,
+			Line:    line.line,
+			RawLine: data,
 		}
 	}
 	r.lines = append(r.lines, &line)

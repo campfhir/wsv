@@ -858,6 +858,7 @@ func TestNullRemainingColumns(t *testing.T) {
 	file := strings.Join(lines, string('\n'))
 	str := strings.NewReader(file)
 	r := NewReader(str)
+	r.NullTrailingColumns = true
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
@@ -983,6 +984,58 @@ func TestNewLineParsing(t *testing.T) {
 	}
 	if r[2].IsNull || r[2].Value != exp {
 		t.Errorf("Parse line expected the 3 field to be a [%s] but got [%s] instead", exp, r[2].Value)
+	}
+}
+
+func TestReadDataWithBareQuote(t *testing.T) {
+	file, err := os.Open("testdata/bare-quote.wsv")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	r := NewReader(file)
+	_, err = r.Read()
+	if err == nil {
+		t.Error("Should have failed")
+	}
+	if err.Error() != "\"First name\" \"This is a date # line is missing ending quote\n            ^\nparse error on line 1, column 13: bare \" in non-quoted-field" {
+		t.Error(err)
+
+	}
+}
+
+func TestReadDataMissingData(t *testing.T) {
+	file, err := os.Open("testdata/missing-many-fields-tabular-records.wsv")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	r := NewReader(file)
+	_, err = r.ReadAll()
+	if err == nil {
+		t.Error("Should have failed")
+		return
+	}
+	if err.Error() != "record on line 2: does not have the correct field count, has 2/4, the values for the headers (\"Date of Birth\"	\"Favorite Color\") are missing\nrecord on line 3: does not have the correct field count, has 3/4, the value for the header (\"Favorite Color\") is missing" {
+		t.Error(err)
+	}
+}
+
+func TestReadExtraRecords(t *testing.T) {
+	file, err := os.Open("testdata/extra-tabular-records.wsv")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	r := NewReader(file)
+	l, err := r.ReadAll()
+	if err == nil {
+		t.Errorf("%d/%d\n", len(r.Headers()), l[2].FieldCount())
+		t.Error("Should have failed")
+		return
+	}
+	if err.Error() != "record on line 3: does not have the correct field count, has 5/4, the value (\"Dark Mode\") is extra\nrecord on line 4: does not have the correct field count, has 6/4, the values (\"Light Mode\", Admin) are extra" {
+		t.Error(err)
 	}
 }
 
@@ -1212,6 +1265,7 @@ func TestReadOmittedColumnsToNull(t *testing.T) {
 		return
 	}
 	r := NewReader(file)
+	r.NullTrailingColumns = true
 	line, err := r.Read()
 	if err != nil {
 		t.Error(err)
