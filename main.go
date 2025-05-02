@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -14,15 +15,29 @@ import (
 	"github.com/campfhir/wsv/xpaths"
 )
 
+// printVersion prints the application version
+func version() string {
+	buildInfo, ok := debug.ReadBuildInfo()
+	if !ok {
+		return fmt.Sprintf("Version: unknown")
+	}
+
+	if buildInfo.Main.Version != "" {
+		return fmt.Sprintf("Version: %s\n", buildInfo.Main.Version)
+	}
+	return fmt.Sprintln("Version: unknown")
+}
+
 func main() {
 	var (
-		input      string
-		output     string
-		inputFile  *os.File
-		outputFile *os.File
-		verify     bool
-		tabular    bool
-		sorting    string
+		input       string
+		output      string
+		inputFile   *os.File
+		outputFile  *os.File
+		verify      bool
+		tabular     bool
+		sorting     string
+		showVersion bool
 	)
 	flag.StringVar(&input, "input", "-", "input file, use `-` for stdin (default stdin)")
 	flag.StringVar(&input, "i", "-", "input file, use `-` for stdin (default stdin)")
@@ -35,7 +50,15 @@ func main() {
 	flag.BoolVar(&tabular, "tabular", true, "specify if a document is tabular or not")
 	flag.BoolVar(&verify, "verify", false, "verify that input is valid wsv")
 	flag.BoolVar(&verify, "v", false, "verify that input is valid wsv")
+	flag.BoolVar(&showVersion, "version", false, "print the version")
 	flag.Parse()
+
+	if showVersion {
+		os.Stdout.WriteString(version())
+		os.Exit(0)
+		return
+	}
+
 	if input != "-" {
 		inputPath, err := xpaths.Resolve(input)
 		if err != nil {
