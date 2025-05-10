@@ -545,6 +545,9 @@ func (r *Reader) ToDocument() (*doc.Document, error) {
 		if err != nil {
 			return nil, err
 		}
+		if rl.Comment() != "" {
+			line.UpdateComment(rl.Comment())
+		}
 		for i := range rl.FieldCount() {
 			field, _ := rl.Field(i)
 			if field.IsNull {
