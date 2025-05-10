@@ -570,7 +570,10 @@ func (doc *Document) WriteAllTo(w io.Writer) error {
 		if err != nil {
 			return err
 		}
-		w.Write(d)
+		_, err = w.Write(d)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
