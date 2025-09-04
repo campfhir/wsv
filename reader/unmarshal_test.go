@@ -9,6 +9,42 @@ import (
 	"github.com/campfhir/wsv/reader"
 )
 
+func TestUnmarsall(t *testing.T) {
+	lines := []string{
+		`"Age"  "Salary"  "Is Admin"`,
+		`39     25210.021	x`,
+	}
+	data := strings.Join(lines, string('\n'))
+
+	type Employee struct {
+		Age   int     `wsv:"Age,format:base10"`
+		Money float32 `wsv:"Salary"`
+		Admin *bool   `wsv:"Is Admin,format:x|"`
+	}
+	var s []Employee
+	err := reader.Unmarshal([]byte(data), &s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(s) != 1 {
+		t.Error("expect 1 entry in slice but got", len(s))
+		return
+	}
+
+	if s[0].Admin == nil || !*s[0].Admin {
+		t.Error("expected admin to be true")
+	}
+
+	if s[0].Age != 39 {
+		t.Error("expect age of 39 but got", s[0].Age)
+	}
+
+	if s[0].Money != 25210.021 {
+		t.Error("expect salary of 25210.021 but got", s[0].Money)
+	}
+}
+
 func TestUnmarshalSimpleData(t *testing.T) {
 	lines := make([]string, 0)
 	lines = append(lines, `"Given Name" "Family Name" "Date of Birth" "Favorite Color"  Age  cool "Is an Admin" Salary "Home Owner" Bought`)
@@ -16,7 +52,7 @@ func TestUnmarshalSimpleData(t *testing.T) {
 	lines = append(lines, `"Mary Jane" "Vasquez Rojas" "02 Feb 2021" "Midnight Grey" - false true - true "2022-09-18"`)
 	data := strings.Join(lines, string('\n'))
 	type hidden_data struct {
-		Home_Owner  bool       `wsv:"Home Owner"`
+		Home_Owner  bool       `wsv:"Home Owner,format:true|false"`
 		Bought_Home *time.Time `wsv:"Bought,format:2006-01-02"`
 	}
 	type Person struct {
@@ -25,8 +61,8 @@ func TestUnmarshalSimpleData(t *testing.T) {
 		Dob           *time.Time `wsv:"Date of Birth,format:'02 Jan 2006'"`
 		FavoriteColor *string    `wsv:"Favorite Color"`
 		Age           *int       `wsv:"Age"`
-		IsCool        bool       `wsv:"cool"`
-		IsAdmin       *bool      `wsv:"Is an Admin"`
+		IsCool        bool       `wsv:"cool,format:true|false"`
+		IsAdmin       *bool      `wsv:"Is an Admin,format:true|false"`
 		Salary        *float32
 		hidden_data
 	}

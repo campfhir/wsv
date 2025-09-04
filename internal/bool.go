@@ -5,11 +5,18 @@ import (
 	"strings"
 )
 
-func ParseBool(str string) (bool, error) {
+func ParseBool(str, format string) (bool, error) {
+	a := strings.Split(format, "|")
+	truth := "True"
+	falsehood := "False"
+	if len(a) >= 2 {
+		truth = a[0]
+		falsehood = a[1]
+	}
 	switch str {
-	case "1", "t", "T", "true", "TRUE", "True", "YES", "Yes", "yes", "Y", "y", "X", "x", "✅", "✓":
+	case truth:
 		return true, nil
-	case "0", "f", "F", "false", "FALSE", "False", "NO", "No", "no", "N", "n", "", "❎":
+	case falsehood:
 		return false, nil
 	}
 	return false, fmt.Errorf("could not parse '%s' as a bool", str)

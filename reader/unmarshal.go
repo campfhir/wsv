@@ -14,8 +14,9 @@ import (
 )
 
 type unmarshalError struct {
-	tag        string
-	attributes []string
+	field      string
+	format     string
+	comment    bool
 	fieldIndex []int
 	fieldType  string
 	cause      error
@@ -27,178 +28,365 @@ type UnmarshalWSV interface {
 
 func (e *unmarshalError) Error() string {
 	if e.cause != nil {
-		return fmt.Sprintf("unmarshal error tag: '%s' attributes: [%s], field index: %d, field type: %s caused by %s", e.tag, strings.Join(e.attributes, ","), e.fieldIndex, e.fieldType, e.cause)
+		return fmt.Sprintf("unmarshal error field: '%s' format: [%s], field index: %d, field type: %s caused by %s", e.field, e.format, e.fieldIndex, e.fieldType, e.cause)
 	}
-	return fmt.Sprintf("unmarshal error tag: '%s' attributes: [%s], field index: %d, field type: %s", e.tag, strings.Join(e.attributes, ","), e.fieldIndex, e.fieldType)
+	return fmt.Sprintf("unmarshal error field: '%s' attributes: [%s], field index: %d, field type: %s", e.field, e.format, e.fieldIndex, e.fieldType)
 }
+
+// func unmarshalRow(fields []utils.Field, t reflect.Type) (*reflect.Value, error) {
+// 	val := reflect.New(t).Elem()
+// 	_type := val.Type()
+// 	if _type.Kind() != reflect.Struct {
+// 		return nil, errors.New("expected a struct to unmarshal to")
+// 	}
+// 	tagLookUp := make(map[string]fieldInfo)
+// 	collectFields(_type, nil, tagLookUp)
+
+// fl:
+// 	for fi, field := range fields {
+// 		_ = fi
+// 		fi, ok := tagLookUp[field.FieldName]
+// 		if !ok {
+// 			continue
+// 		}
+// 		ty := fi.Field
+
+// 		if !ty.IsExported() {
+// 			continue
+// 		}
+// 		tag, _ := ty.Tag.Lookup("wsv")
+// 		if tag == "" {
+// 			tag = ty.Name
+// 		}
+// 		name := ""
+// 		format := ""
+// 		keys := utils.SplitQuoted(tag)
+// 		if len(keys) > 0 {
+// 			name = keys[0]
+// 		}
+// 		if name == "" || name != field.FieldName {
+// 			continue
+// 		}
+// 		for _, key := range keys {
+// 			if f, ok := strings.CutPrefix(key, "format:"); ok {
+// 				format = f
+// 				break
+// 			}
+// 		}
+
+// 		sf := val.FieldByIndex(fi.Index)
+// 		if sf.CanAddr() {
+// 			addr := sf.Addr().Interface()
+// 			if u, ok := addr.(UnmarshalWSV); ok {
+// 				if err := u.UnmarshalWSV(field.Value, format); err != nil {
+// 					return nil, &unmarshalError{
+// 						tag:        name,
+// 						attributes: keys,
+// 						fieldIndex: fi.Index,
+// 						fieldType:  sf.Type().String(),
+// 						cause:      err,
+// 					}
+// 				}
+// 				continue fl
+// 			}
+// 		}
+// 		switch sf.Type().Kind() {
+// 		case reflect.String:
+// 			sf.SetString(field.Value)
+// 			continue fl
+// 		case reflect.Bool:
+// 			v, err := internal.ParseBool(field.Value)
+// 			if err != nil {
+// 				return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Kind().String(), cause: err}
+// 			}
+// 			sf.SetBool(v)
+// 			continue fl
+// 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+// 			v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
+// 			if err != nil {
+// 				return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Kind().String(), cause: err}
+// 			}
+// 			sf.SetInt(v)
+// 			continue fl
+// 		case reflect.Float32, reflect.Float64:
+// 			v, err := strconv.ParseFloat(field.Value, strconv.IntSize)
+// 			if err != nil {
+// 				return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Kind().String(), cause: err}
+// 			}
+// 			sf.SetFloat(v)
+// 			continue fl
+// 		case reflect.Ptr:
+// 			if field.IsNull {
+// 				continue fl
+// 			}
+// 			switch sf.Interface().(type) {
+// 			case *time.Time:
+// 				v, err := time.Parse(format, field.Value)
+// 				if err != nil {
+// 					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*time.Time", cause: err}
+// 				}
+// 				sf.Set(reflect.ValueOf(&v))
+// 				continue fl
+// 			case *string:
+// 				sf.Set(reflect.ValueOf(&field.Value))
+// 				continue fl
+// 			case *int:
+// 				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
+// 				if err != nil {
+// 					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int", cause: err}
+// 				}
+// 				x := int(v)
+// 				sf.Set(reflect.ValueOf(&x))
+// 				continue fl
+// 			case *int8:
+// 				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
+// 				if err != nil {
+// 					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int8", cause: err}
+// 				}
+// 				x := int8(v)
+// 				sf.Set(reflect.ValueOf(&x))
+// 				continue fl
+// 			case *int16:
+// 				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
+// 				if err != nil {
+// 					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int16", cause: err}
+// 				}
+// 				x := int16(v)
+// 				sf.Set(reflect.ValueOf(&x))
+// 				continue fl
+// 			case *int32:
+// 				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
+// 				if err != nil {
+// 					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int32", cause: err}
+// 				}
+// 				x := int32(v)
+// 				sf.Set(reflect.ValueOf(&x))
+// 				continue fl
+// 			case *int64:
+// 				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
+// 				if err != nil {
+// 					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int64", cause: err}
+// 				}
+// 				sf.Set(reflect.ValueOf(&v))
+// 				continue fl
+// 			case *float32:
+// 				v, err := strconv.ParseFloat(field.Value, strconv.IntSize)
+// 				if err != nil {
+// 					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*float32", cause: err}
+// 				}
+// 				x := float32(v)
+// 				sf.Set(reflect.ValueOf(&x))
+// 				continue fl
+// 			case *float64:
+// 				v, err := strconv.ParseFloat(field.Value, strconv.IntSize)
+// 				if err != nil {
+// 					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*float64", cause: err}
+// 				}
+// 				sf.Set(reflect.ValueOf(&v))
+// 				continue fl
+// 			case *bool:
+// 				v, err := internal.ParseBool(field.Value)
+// 				if err != nil {
+// 					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*bool", cause: err}
+// 				}
+// 				sf.Set(reflect.ValueOf(&v))
+// 				continue fl
+// 			default:
+// 				return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Type().String()}
+// 			}
+// 		default:
+// 			return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Type().String()}
+// 		}
+// 	}
+
+// 	return &val, nil
+// }
 
 func unmarshalRow(fields []utils.Field, t reflect.Type) (*reflect.Value, error) {
 	val := reflect.New(t).Elem()
-	_type := val.Type()
-	if _type.Kind() != reflect.Struct {
+	if val.Kind() != reflect.Struct {
 		return nil, errors.New("expected a struct to unmarshal to")
 	}
-	tagLookUp := make(map[string]fieldInfo)
-	collectFields(_type, nil, tagLookUp)
 
-fl:
-	for fi, field := range fields {
-		_ = fi
-		fi, ok := tagLookUp[field.FieldName]
-		if !ok {
-			continue
-		}
-		ty := fi.Field
+	// Collect all fields indexed by tag name
+	tagLookup := make(map[string]fieldInfo)
+	collectFields(val.Type(), nil, tagLookup)
 
-		if !ty.IsExported() {
+	for _, field := range fields {
+		fi, ok := tagLookup[field.FieldName]
+		if !ok || !fi.Field.IsExported() {
 			continue
 		}
-		tag, _ := ty.Tag.Lookup("wsv")
-		if tag == "" {
-			tag = ty.Name
-		}
-		name := ""
-		format := ""
-		keys := utils.SplitQuoted(tag)
-		if len(keys) > 0 {
-			name = keys[0]
-		}
-		if name == "" || name != field.FieldName {
+
+		key, _, format, literalEmptyField := parseWSVTag(fi.Field)
+		if key == "-" && !literalEmptyField {
 			continue
 		}
-		for _, key := range keys {
-			if f, ok := strings.CutPrefix(key, "format:"); ok {
-				format = f
-				break
-			}
+		if key == "" || key != field.FieldName {
+			continue
 		}
 
 		sf := val.FieldByIndex(fi.Index)
+
+		// Custom Unmarshaler
 		if sf.CanAddr() {
-			addr := sf.Addr().Interface()
-			if u, ok := addr.(UnmarshalWSV); ok {
+			if u, ok := sf.Addr().Interface().(UnmarshalWSV); ok {
 				if err := u.UnmarshalWSV(field.Value, format); err != nil {
-					return nil, &unmarshalError{
-						tag:        name,
-						attributes: keys,
-						fieldIndex: fi.Index,
-						fieldType:  sf.Type().String(),
-						cause:      err,
-					}
+					return nil, newUnmarshalError(key, format, fi.Index, sf.Type().String(), err)
 				}
-				continue fl
+				continue
 			}
 		}
-		switch sf.Type().Kind() {
-		case reflect.String:
-			sf.SetString(field.Value)
-			continue fl
-		case reflect.Bool:
-			v, err := internal.ParseBool(field.Value)
-			if err != nil {
-				return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Kind().String(), cause: err}
-			}
-			sf.SetBool(v)
-			continue fl
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
-			if err != nil {
-				return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Kind().String(), cause: err}
-			}
-			sf.SetInt(v)
-			continue fl
-		case reflect.Float32, reflect.Float64:
-			v, err := strconv.ParseFloat(field.Value, strconv.IntSize)
-			if err != nil {
-				return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Kind().String(), cause: err}
-			}
-			sf.SetFloat(v)
-			continue fl
-		case reflect.Ptr:
-			if field.IsNull {
-				continue fl
-			}
-			switch sf.Interface().(type) {
-			case *time.Time:
-				v, err := time.Parse(format, field.Value)
-				if err != nil {
-					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*time.Time", cause: err}
-				}
-				sf.Set(reflect.ValueOf(&v))
-				continue fl
-			case *string:
-				sf.Set(reflect.ValueOf(&field.Value))
-				continue fl
-			case *int:
-				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
-				if err != nil {
-					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int", cause: err}
-				}
-				x := int(v)
-				sf.Set(reflect.ValueOf(&x))
-				continue fl
-			case *int8:
-				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
-				if err != nil {
-					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int8", cause: err}
-				}
-				x := int8(v)
-				sf.Set(reflect.ValueOf(&x))
-				continue fl
-			case *int16:
-				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
-				if err != nil {
-					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int16", cause: err}
-				}
-				x := int16(v)
-				sf.Set(reflect.ValueOf(&x))
-				continue fl
-			case *int32:
-				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
-				if err != nil {
-					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int32", cause: err}
-				}
-				x := int32(v)
-				sf.Set(reflect.ValueOf(&x))
-				continue fl
-			case *int64:
-				v, err := strconv.ParseInt(field.Value, 10, strconv.IntSize)
-				if err != nil {
-					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*int64", cause: err}
-				}
-				sf.Set(reflect.ValueOf(&v))
-				continue fl
-			case *float32:
-				v, err := strconv.ParseFloat(field.Value, strconv.IntSize)
-				if err != nil {
-					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*float32", cause: err}
-				}
-				x := float32(v)
-				sf.Set(reflect.ValueOf(&x))
-				continue fl
-			case *float64:
-				v, err := strconv.ParseFloat(field.Value, strconv.IntSize)
-				if err != nil {
-					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*float64", cause: err}
-				}
-				sf.Set(reflect.ValueOf(&v))
-				continue fl
-			case *bool:
-				v, err := internal.ParseBool(field.Value)
-				if err != nil {
-					return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: "*bool", cause: err}
-				}
-				sf.Set(reflect.ValueOf(&v))
-				continue fl
-			default:
-				return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Type().String()}
-			}
-		default:
-			return nil, &unmarshalError{tag: name, attributes: keys, fieldIndex: fi.Index, fieldType: sf.Type().String()}
+
+		if err := setValue(sf, field, key, format, fi.Index); err != nil {
+			return nil, err
 		}
 	}
 
 	return &val, nil
+}
+
+// // parseWSVTag extracts the main name, format, and attributes from the struct tag.
+// func parseWSVTag(sf reflect.StructField) (name, format string, attrs []string) {
+// 	tag, _ := sf.Tag.Lookup("wsv")
+// 	if tag == "" {
+// 		tag = sf.Name
+// 	}
+// 	attrs = utils.SplitQuoted(tag)
+// 	if len(attrs) > 0 {
+// 		name = attrs[0]
+// 	}
+// 	for _, attr := range attrs {
+// 		if f, ok := strings.CutPrefix(attr, "format:"); ok {
+// 			format = f
+// 			break
+// 		}
+// 	}
+// 	return
+// }
+
+// setValue assigns a field value according to its kind/pointer type.
+func setValue(sf reflect.Value, field utils.Field, fieldName, format string, idx []int) error {
+	switch sf.Kind() {
+	case reflect.String:
+		sf.SetString(field.Value)
+	case reflect.Bool:
+		format = defaultIfEmpty(format, "True|False")
+		return setBool(sf, field.Value, fieldName, format, idx)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return setInt(sf, field.Value, fieldName, format, idx)
+	case reflect.Float32, reflect.Float64:
+		return setFloat(sf, field.Value, fieldName, format, idx)
+	case reflect.Ptr:
+		if field.IsNull {
+			return nil
+		}
+		return setPointer(sf, field, fieldName, format, idx)
+	default:
+		return newUnmarshalError(fieldName, format, idx, sf.Type().String(), nil)
+	}
+	return nil
+}
+
+func setBool(sf reflect.Value, raw, field, format string, idx []int) error {
+	v, err := internal.ParseBool(raw, format)
+	if err != nil {
+		return newUnmarshalError(field, format, idx, sf.Kind().String(), err)
+	}
+	sf.SetBool(v)
+	return nil
+}
+
+var intMap = map[string]int64{
+	"base2":  int64(2),
+	"base8":  int64(8),
+	"base10": int64(10),
+	"base16": int64(16),
+}
+
+func parseInt(raw, format string) (v int64, err error) {
+	base := int64(10)
+	if b, ok := intMap[format]; ok {
+		base = b
+		format = ""
+	}
+	if format != "" {
+		base, err = strconv.ParseInt(format, 10, strconv.IntSize)
+	}
+
+	if err != nil {
+		return
+	}
+	v, err = strconv.ParseInt(raw, int(base), strconv.IntSize)
+	return
+}
+
+func setInt(sf reflect.Value, raw, field string, format string, idx []int) error {
+	v, err := parseInt(raw, format)
+	if err != nil {
+		return newUnmarshalError(field, format, idx, sf.Kind().String(), err)
+	}
+	sf.SetInt(v)
+	return nil
+}
+
+func setFloat(sf reflect.Value, raw, field string, format string, idx []int) error {
+	v, err := strconv.ParseFloat(raw, strconv.IntSize)
+	if err != nil {
+		return newUnmarshalError(field, format, idx, sf.Kind().String(), err)
+	}
+	sf.SetFloat(v)
+	return nil
+}
+
+func setPointer(sf reflect.Value, field utils.Field, fieldName, format string, idx []int) error {
+	switch sf.Type().Elem().Kind() {
+	case reflect.String:
+		sf.Set(reflect.ValueOf(&field.Value))
+	case reflect.Bool:
+		format = defaultIfEmpty(format, "True|False")
+		v, err := internal.ParseBool(field.Value, format)
+		if err != nil {
+			return newUnmarshalError(fieldName, format, idx, "*bool", err)
+		}
+		sf.Set(reflect.ValueOf(&v))
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v, err := parseInt(field.Value, format)
+		if err != nil {
+			return newUnmarshalError(fieldName, format, idx, sf.Type().String(), err)
+		}
+		sf.Set(reflect.New(sf.Type().Elem()))
+		sf.Elem().SetInt(v)
+	case reflect.Float32, reflect.Float64:
+		v, err := strconv.ParseFloat(field.Value, 64)
+		if err != nil {
+			return newUnmarshalError(fieldName, format, idx, sf.Type().String(), err)
+		}
+		sf.Set(reflect.New(sf.Type().Elem()))
+		sf.Elem().SetFloat(v)
+	default:
+		// Handle special cases like *time.Time
+		if sf.Type() == reflect.TypeOf(&time.Time{}) {
+			v, err := time.Parse(format, field.Value)
+			if err != nil {
+				return newUnmarshalError(fieldName, format, idx, "*time.Time", err)
+			}
+			sf.Set(reflect.ValueOf(&v))
+			return nil
+		}
+		return newUnmarshalError(fieldName, format, idx, sf.Type().String(), nil)
+	}
+	return nil
+}
+
+func newUnmarshalError(field string, format string, idx []int, typ string, cause error) error {
+	return &unmarshalError{
+		field:      field,
+		format:     format,
+		fieldIndex: idx,
+		fieldType:  typ,
+		cause:      cause,
+	}
 }
 
 type fieldInfo struct {
