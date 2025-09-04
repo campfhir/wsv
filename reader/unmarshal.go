@@ -29,7 +29,7 @@ func (e *unmarshalError) Error() string {
 	if e.cause != nil {
 		return fmt.Sprintf("unmarshal error field: '%s' format: [%s], field index: %d, field type: %s caused by %s", e.field, e.format, e.fieldIndex, e.fieldType, e.cause)
 	}
-	return fmt.Sprintf("unmarshal error field: '%s' attributes: [%s], field index: %d, field type: %s", e.field, e.format, e.fieldIndex, e.fieldType)
+	return fmt.Sprintf("unmarshal error field: '%s' format: [%s], field index: %d, field type: %s", e.field, e.format, e.fieldIndex, e.fieldType)
 }
 
 func unmarshalRow(fields []internal.Field, t reflect.Type) (*reflect.Value, error) {
@@ -88,13 +88,24 @@ func setValue(sf reflect.Value, field internal.Field, fieldName, format string, 
 		return setInt(sf, field.Value, fieldName, format, idx)
 	case reflect.Float32, reflect.Float64:
 		return setFloat(sf, field.Value, fieldName, format, idx)
+
+	case reflect.Struct:
+		if _, ok := sf.Interface().(time.Time); ok {
+			format = parseStructTagDateFormat(format)
+			t, err := time.Parse(format, field.Value)
+			if err != nil {
+				return err
+			}
+			sf.Set(reflect.ValueOf(t))
+			return nil
+		}
 	case reflect.Ptr:
 		if field.IsNull {
 			return nil
 		}
 		return setPointer(sf, field, fieldName, format, idx)
 	default:
-		return newUnmarshalError(fieldName, format, idx, sf.Type().String(), nil)
+		return newUnmarshalError(fieldName, format, idx, sf.Type().String(), fmt.Errorf("the type '%s' is not supported to unmarshal without [UnmarshalWSV.UnmarshalWSV]", sf.Type().String()))
 	}
 	return nil
 }

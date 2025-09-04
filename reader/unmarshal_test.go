@@ -11,15 +11,16 @@ import (
 
 func TestUnmarsall(t *testing.T) {
 	lines := []string{
-		`"Age"  "Salary"  "Is Admin"`,
-		`39     25210.021	x`,
+		`"Age"  "Salary"  "Is Admin" "Day"`,
+		`39     25210.021	x "July 29, 2000"`,
 	}
 	data := strings.Join(lines, string('\n'))
 
 	type Employee struct {
-		Age   int     `wsv:"Age,format:base10"`
-		Money float32 `wsv:"Salary"`
-		Admin *bool   `wsv:"Is Admin,format:x|"`
+		Age   int       `wsv:"Age,format:base10"`
+		Money float32   `wsv:"Salary"`
+		Admin *bool     `wsv:"Is Admin,format:x|"`
+		Date  time.Time `wsv:"Day,format:'January 02, 2006'"`
 	}
 	var s []Employee
 	err := reader.Unmarshal([]byte(data), &s)
@@ -42,6 +43,10 @@ func TestUnmarsall(t *testing.T) {
 
 	if s[0].Money != 25210.021 {
 		t.Error("expect salary of 25210.021 but got", s[0].Money)
+	}
+
+	if s[0].Date.Format(time.DateOnly) != "2000-07-29" {
+		t.Error("expected date to be 2000-07-29 but got", s[0].Date)
 	}
 }
 
