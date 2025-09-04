@@ -115,3 +115,55 @@ A CLI is included to help with formatting and verifying a WSV document.
 | -s<br />-sort                     | sort by column(s) seperated by ; will be sorted in the order provided, can use `::` modifier followed by asc or desc to specify direction (defaults asc) |
 | -tabular                          | specify if a document is tabular or not. [Tabular means each record/line has the same number of fields] (default true)                                   |
 | -v<br />-verify                   | verify that input is valid wsv                                                                                                                           |
+
+## Marsal
+
+A struct can be marshaled into WSV using exported fields or using the `wsv` struct tags.
+
+Out-of-box support for marshaling `string`, `int`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`, `bool`, and `time.Time` and also supports pointers of those types.
+
+### Int Format
+
+When marsaling `int` `int8`, `int16`, `int32`, `int64`, `*int` `*int8`, `*int16`, `*int32`, and `*int64` an optional `format:` attribute can be provided using the `fmt.Sprintf` format specifier to print the value of the int. The default will be `%d`.
+
+### Float Format
+
+When marshaling `float32`, `float64`, `*float32`, `*float64` an optional `format:` attribute can be provided using the `fmt.Sprintf` format specifier to print the value of the float. The default will be `%.2f` if not specified.
+
+### Bool Format
+
+When marshaling `bool` or `*bool` an optional `format:` attribute can be provided using a `true|false` format, the literal value to the left of the `|` renders the value of the `true` value and the value to the right the `false` value. The default will be `True|False` if not specified.
+
+_Note: Spaces are not trimmed so `wsv:"field,format: true| false"` will be rendered as `" true"` and `" false"`_
+
+### Time Format
+
+When marsalling `time.Time` or `*time.Time` an optional `format:` attribute can be provided using the `time.Format` function to render value.
+
+The time can be written a literal string layout `2006-01-02` or using a the following shorthand values:
+
+_Note: Case insensitive_
+
+- layout
+- ansic
+- unixdate
+- rubydate
+- rfc822
+- rfc822z
+- rfc850
+- rfc1123
+- rfc1123z
+- rfc3339
+- rfc3339nano
+- kitchen
+- stamp
+- stampmilli
+- stampmicro
+- stampnano
+- datetime
+- dateonly
+- date
+- timeonly
+- time
+
+If you need a format with `,` you can escape the `,` by wrapping the `format` in `'` single qoutes. For example `wsv:"field,format:'Jan 02, 2006'`.

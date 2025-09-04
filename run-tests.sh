@@ -1,3 +1,3 @@
 #! /bin/sh
 
-go test ./document ./reader ./record
+go test ./document ./reader

@@ -1,12 +1,9 @@
-package record
+package internal
 
 import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/campfhir/wsv/internal"
-	"github.com/campfhir/wsv/utils"
 )
 
 type Field struct {
@@ -45,7 +42,7 @@ func (f *Field) SerializeText() string {
 //
 // - `""` for an empty string
 func SerializeValues(s []string) []string {
-	return internal.Map(s, func(e string, i int, a []string) string {
+	return Map(s, func(e string, i int, a []string) string {
 		return SerializeValue(e)
 	})
 }
@@ -72,7 +69,7 @@ func SerializeValue(v string) string {
 		wrapped = true
 		v = fmt.Sprintf(`"%s"`, v)
 	}
-	if strings.ContainsFunc(v, utils.IsFieldDelimiter) && !wrapped {
+	if strings.ContainsFunc(v, IsFieldDelimiter) && !wrapped {
 		wrapped = true
 		v = fmt.Sprintf(`"%s"`, v)
 	}

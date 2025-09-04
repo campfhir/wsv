@@ -9,7 +9,7 @@ import (
 func version() string {
 	buildInfo, ok := debug.ReadBuildInfo()
 	if !ok {
-		return fmt.Sprintf("Version: unknown")
+		return "Version: unknown"
 	}
 
 	if buildInfo.Main.Version != "" {

@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/campfhir/wsv/internal"
-	"github.com/campfhir/wsv/record"
 )
 
 var (
@@ -13,7 +12,8 @@ var (
 )
 
 type Line interface {
-	Field(fi int) (*record.Field, error)
+	// Returns the field value at the 0-index or `ErrFieldNotFound` if out of bounds
+	Field(fi int) (*internal.Field, error)
 	// Get the value of comment for the line
 	Comment() string
 	// Get the line number
@@ -21,15 +21,17 @@ type Line interface {
 	// A count of the number of data fields in the line
 	FieldCount() int
 	// Get the next field value, or error if at the end of the line for data
-	NextField() (*record.Field, error)
+	NextField() (*internal.Field, error)
 	// Returns true if the line is a slice of headers
 	IsHeaderLine() bool
 	// Returns serialized values of all fields on a line
 	FieldsValues() []string
+	// All the fields in the line
+	Fields() []internal.Field
 }
 
 type readerLine struct {
-	fields  []record.Field
+	fields  []internal.Field
 	comment string
 	// Lines are 1-indexed
 	line int
@@ -39,7 +41,16 @@ type readerLine struct {
 	isHeaderLine bool
 }
 
-func (line *readerLine) NextField() (*record.Field, error) {
+// A slice of all the fields in this line
+func (line *readerLine) Fields() []internal.Field {
+	return line.fields
+}
+
+// Iterate to the next field in the line
+// increments the current field point with each call
+//
+// If called on an empty line or after all fields have been read will return `ErrEndOfLine`
+func (line *readerLine) NextField() (*internal.Field, error) {
 	if len(line.fields)-1 < line.currentField {
 		return nil, ErrEndOfLine
 	}
@@ -53,11 +64,12 @@ func (line *readerLine) FieldCount() int {
 	return line.fieldCount
 }
 
+// The line number for this current line
 func (line *readerLine) LineNumber() int {
 	return line.line
 }
 
-func (line *readerLine) Field(fieldIndex int) (*record.Field, error) {
+func (line *readerLine) Field(fieldIndex int) (*internal.Field, error) {
 	if len(line.fields)-1 < fieldIndex {
 		return nil, ErrFieldNotFound
 	}
@@ -78,7 +90,7 @@ func (line *readerLine) UpdateComment(val string) {
 
 func (line *readerLine) FieldsValues() []string {
 	return internal.Map(line.fields,
-		func(e record.Field, i int, a []record.Field) string {
+		func(e internal.Field, i int, a []internal.Field) string {
 			return e.SerializeText()
 		})
 }

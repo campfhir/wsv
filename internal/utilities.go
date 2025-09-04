@@ -1,8 +1,10 @@
-package utils
+package internal
 
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 )
 
 const (
@@ -100,4 +102,104 @@ func GetIndexOfSlice[T any](s []T, i int) (*T, error) {
 		return nil, fmt.Errorf("index %d is greater than %d", i, len(s)-1)
 	}
 	return &s[i], nil
+}
+
+// SplitEscaped splits s by ',' unless the ',' is escaped with '\'
+func SplitEscaped(s string) []string {
+	var result []string
+	var current strings.Builder
+	escaped := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+
+		if escaped {
+			// If previous char was '\', just append current char literally
+			current.WriteByte(ch)
+			escaped = false
+			continue
+		}
+
+		if ch == '\\' {
+			// Next char is escaped
+			escaped = true
+			continue
+		}
+
+		if ch == ',' {
+			// Split on unescaped comma
+			result = append(result, current.String())
+			current.Reset()
+		} else {
+			current.WriteByte(ch)
+		}
+	}
+
+	// Append the last piece
+	result = append(result, current.String())
+
+	return result
+}
+
+// SplitQuoted splits s by [,] unless inside single quotes.
+// Inside quotes, you can escape a single quote with [\']
+func SplitQuoted(s string) []string {
+	var result []string
+	var current strings.Builder
+	inQuotes := false
+	escaped := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+
+		if escaped {
+			// Inside quotes: handle escapes
+			if ch == '\\' || ch == '\'' {
+				current.WriteByte(ch)
+			} else {
+				// Unknown escape: keep the backslash
+				current.WriteByte('\\')
+				current.WriteByte(ch)
+			}
+			escaped = false
+			continue
+		}
+
+		if inQuotes {
+			if ch == '\\' {
+				escaped = true
+				continue
+			}
+			if ch == '\'' {
+				inQuotes = false
+				continue
+			}
+			current.WriteByte(ch)
+		} else {
+			if ch == '\'' {
+				inQuotes = true
+				continue
+			}
+			if ch == ',' {
+				result = append(result, current.String())
+				current.Reset()
+				continue
+			}
+			current.WriteByte(ch)
+		}
+	}
+
+	result = append(result, current.String())
+	return result
+}
+
+func UnwrapStr[t any](a t) string {
+	v := reflect.ValueOf(a)
+	if v.Kind() == reflect.Pointer && v.IsNil() {
+		return "<nil>"
+	}
+	if v.Kind() == reflect.Pointer && !v.IsNil() {
+		return fmt.Sprint(v.Elem().Interface())
+	}
+	return fmt.Sprint(a)
 }

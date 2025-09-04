@@ -12,8 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/campfhir/wsv/internal"
-	"github.com/campfhir/wsv/record"
-	"github.com/campfhir/wsv/utils"
 )
 
 type WriteError struct {
@@ -22,6 +20,7 @@ type WriteError struct {
 	headerCount        int
 	expectedFieldCount int
 	err                error
+	fieldValues        []internal.Field
 }
 
 var (
@@ -46,7 +45,9 @@ func (e *WriteError) Error() string {
 	}
 
 	if e.err == ErrFieldCount {
-		return fmt.Sprintf("line %d does not have the proper number of fields, field count %d/%d", e.line, e.fieldIndex, e.expectedFieldCount)
+		return fmt.Sprintf("line %d does not have the proper number of fields, field count %d/%d: %s", e.line, e.fieldIndex, e.expectedFieldCount, strings.Join(internal.Map(e.fieldValues, func(e internal.Field, i int, a []internal.Field) string {
+			return e.SerializeText()
+		}), "  "))
 	}
 
 	return e.err.Error()
@@ -68,7 +69,7 @@ type Document struct {
 
 func (doc *Document) SetPadding(rs []rune) error {
 	for _, r := range rs {
-		if !utils.IsFieldDelimiter(r) {
+		if !internal.IsFieldDelimiter(r) {
 			return &WriteError{err: ErrInvalidPaddingRune}
 		}
 	}
@@ -146,7 +147,7 @@ func (doc *Document) AddLine() (Line, error) {
 	pln := len(doc.lines)
 	line := documentLine{
 		doc:    doc,
-		fields: make([]record.Field, 0),
+		fields: make([]internal.Field, 0),
 		line:   pln + 1,
 	}
 
@@ -156,7 +157,7 @@ func (doc *Document) AddLine() (Line, error) {
 }
 
 // evaluates previous and current record fields and should return true if current field is after previous field
-type SortFunc = func(prv *record.Field, curr *record.Field) bool
+type SortFunc = func(prv *internal.Field, curr *internal.Field) bool
 
 func Sort(fieldName string) *internal.SortOption {
 	return &internal.SortOption{FieldName: fieldName}
@@ -209,6 +210,9 @@ func (doc *Document) SortBy(sortOptions ...*internal.SortOption) error {
 			continue
 		}
 		slices.SortStableFunc(doc.lines, func(cur Line, next Line) int {
+			if cur.IsHeader() && next.IsHeader() {
+				return 0
+			}
 			if cur.IsHeader() {
 				return -1
 			}
@@ -245,10 +249,17 @@ func (doc *Document) SortBy(sortOptions ...*internal.SortOption) error {
 //	-1 when line[Field].Value < cmpLine[Field].Value or line[Field].Value is nil
 //	 0 when line[Field].Value == cmpLine[Field].Value
 //	+1 when line[Field].Value > cmpLine[Field].Value or cmpLine[Field].Value is nil
-func sortFieldsColumn(opt *internal.SortOption, a *record.Field, b *record.Field) int {
+func sortFieldsColumn(opt *internal.SortOption, a *internal.Field, b *internal.Field) int {
 
 	if opt.AsTime {
-		order := sortTimeColumn(opt, a, b)
+		order := 0
+		if a == nil || a.IsNull {
+			order = +1
+		} else if b == nil || b.IsNull {
+			order = -1
+		} else {
+			order = sortTimeColumn(opt.TimeFormat, a, b)
+		}
 		if opt.Desc {
 			return order * -1
 		}
@@ -256,7 +267,7 @@ func sortFieldsColumn(opt *internal.SortOption, a *record.Field, b *record.Field
 	}
 
 	if opt.AsNumber {
-		order := sortNumbersColumn(opt, a, b)
+		order := sortNumbers(opt.NumberRadix, a.Value, b.Value)
 		if opt.Desc {
 			return order * -1
 		}
@@ -281,18 +292,12 @@ func sortFieldsColumn(opt *internal.SortOption, a *record.Field, b *record.Field
 	return order
 }
 
-func sortNumbersColumn(opt *internal.SortOption, a *record.Field, b *record.Field) int {
-	if a == nil || a.IsNull {
-		return +1
-	}
-	if b == nil || b.IsNull {
-		return -1
-	}
-	number1, err := strconv.ParseInt(a.Value, opt.NumberRadix, internal.PtrSize())
+func sortNumbers(radix int, a string, b string) int {
+	number1, err := strconv.ParseInt(a, radix, strconv.IntSize)
 	if err != nil {
 		return +1
 	}
-	number2, err := strconv.ParseInt(b.Value, opt.NumberRadix, internal.PtrSize())
+	number2, err := strconv.ParseInt(b, radix, strconv.IntSize)
 	if number1 < number2 {
 		return -1
 	} else if number1 > number2 {
@@ -302,18 +307,18 @@ func sortNumbersColumn(opt *internal.SortOption, a *record.Field, b *record.Fiel
 	return 0
 }
 
-func sortTimeColumn(opt *internal.SortOption, a *record.Field, b *record.Field) int {
+func sortTimeColumn(timeFormat string, a *internal.Field, b *internal.Field) int {
 	if a == nil || a.IsNull {
 		return +1
 	}
 	if b == nil || b.IsNull {
 		return -1
 	}
-	time1, err := time.Parse(opt.TimeFormat, a.Value)
+	time1, err := time.Parse(timeFormat, a.Value)
 	if err != nil {
 		return +1
 	}
-	time2, err := time.Parse(opt.TimeFormat, b.Value)
+	time2, err := time.Parse(timeFormat, b.Value)
 	if err != nil {
 		return -1
 	}
@@ -398,7 +403,7 @@ func (doc *Document) Write() ([]byte, error) {
 	}
 	// if configured to be tabular, not an empty line, and has too little/many fields compared to headers return an error
 	if doc.Tabular && doc.currentWriteLine != 0 && line.FieldCount() != 0 && line.FieldCount() != len(doc.Headers()) {
-		return buf, &WriteError{line: line.LineNumber(), headerCount: len(doc.Headers()), fieldIndex: line.FieldCount(), err: ErrFieldCount, expectedFieldCount: len(doc.Headers())}
+		return buf, &WriteError{line: line.LineNumber(), headerCount: len(doc.Headers()), fieldIndex: line.FieldCount(), err: ErrFieldCount, expectedFieldCount: len(doc.Headers()), fieldValues: line.Fields()}
 	}
 
 	for i, field := range line.Fields() {
@@ -423,13 +428,13 @@ func (doc *Document) Write() ([]byte, error) {
 		if i == 0 {
 			buf = append(buf, []byte(v)...)
 		} else {
-			buf = append(buf, utils.RuneToBytes(doc.padding)...)
+			buf = append(buf, internal.RuneToBytes(doc.padding)...)
 			buf = append(buf, []byte(v)...)
 		}
 	}
 	if len(line.Comment()) > 0 {
 		if len(buf) > 0 {
-			buf = append(buf, utils.RuneToBytes(doc.padding)...)
+			buf = append(buf, internal.RuneToBytes(doc.padding)...)
 			buf = fmt.Appendf(buf, "#%s", line.Comment())
 		} else {
 			buf = fmt.Appendf(buf, "#%s", line.Comment())
@@ -443,13 +448,14 @@ func (doc *Document) Write() ([]byte, error) {
 
 func (doc *Document) WriteAll() ([]byte, error) {
 	data := make([]byte, 0)
+	doc.currentWriteLine = 0
+
 	for {
 		d, err := doc.Write()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-
 			return data, err
 		}
 		data = append(data, d...)

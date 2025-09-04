@@ -1,16 +1,18 @@
 package reader
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	doc "github.com/campfhir/wsv/document"
 
-	"github.com/campfhir/wsv/utils"
+	utils "github.com/campfhir/wsv/internal"
 )
 
 func toPointer[t any](a t) *t {
@@ -2804,5 +2806,87 @@ func TestReadingAndSortingNumberFields(t *testing.T) {
 				t.Error("expected", expectedValue, "but got", field.Value)
 			}
 		}
+	}
+}
+
+func TestLargeRandomSortByMultipleColumns(t *testing.T) {
+	file, err := os.Open("testdata/large_data.wsv")
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	exp, err := os.Open("testdata/sorted_by_id_large_data.wsv")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	expRe := NewReader(exp)
+	expectedDoc, err := expRe.ToDocument()
+	if err != nil {
+		t.Error("parsing expected file to document failed", "error", err)
+		return
+	}
+	r := NewReader(file)
+	d, err := r.ToDocument()
+	if err != nil {
+		t.Error("parsing into a document failed", "error", err)
+		return
+	}
+	err = d.SortBy(doc.SortTime("Date of Birth", time.DateOnly), doc.SortNumber("ID"))
+	if err != nil {
+		t.Error("sorting failed", "error", err)
+	}
+	data, err := d.WriteAll()
+	if err != nil {
+		t.Error("writing to output failed", "error", err)
+	}
+	expData, err := expectedDoc.WriteAll()
+	if err != nil {
+		t.Error("failed to to write expected document bytes", "error", err)
+	}
+	if !bytes.Equal(data, expData) {
+		t.Error("\n" + string(data))
+	}
+}
+
+func TestLargeAnotherRandomSortByMultipleColumns(t *testing.T) {
+	file, err := os.Open("testdata/large_data.wsv")
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	exp, err := os.Open("testdata/sorted_by_dob_large_data.wsv")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	expRe := NewReader(exp)
+	expectedDoc, err := expRe.ToDocument()
+	if err != nil {
+		t.Error("parsing expected file to document failed", "error", err)
+		return
+	}
+	r := NewReader(file)
+	d, err := r.ToDocument()
+	if err != nil {
+		t.Error("parsing into a document failed", "error", err)
+		return
+	}
+	err = d.SortBy(doc.SortNumber("ID"), doc.SortTime("Date of Birth", time.DateOnly))
+	if err != nil {
+		t.Error("sorting failed", "error", err)
+	}
+	data, err := d.WriteAll()
+	if err != nil {
+		t.Error("writing to output failed", "error", err)
+	}
+	expData, err := expectedDoc.WriteAll()
+	if err != nil {
+		t.Error("failed to to write expected document bytes", "error", err)
+	}
+	if !bytes.Equal(data, expData) {
+		t.Error("\n" + string(data))
 	}
 }

@@ -1,4 +1,4 @@
-package xpaths
+package internal
 
 import (
 	"os/user"

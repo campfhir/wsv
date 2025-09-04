@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/campfhir/wsv/record"
+	"github.com/campfhir/wsv/internal"
 )
 
 var (
@@ -14,7 +14,7 @@ var (
 
 type documentLine struct {
 	doc          *Document
-	fields       []record.Field
+	fields       []internal.Field
 	comment      string
 	currentField int
 	// Lines are 1-indexed
@@ -35,9 +35,9 @@ type Line interface {
 	// Append a null value to the end of the line
 	AppendNull() error
 	// Get the next field value, or error if at the end of the line for data
-	NextField() (*record.Field, error)
+	NextField() (*internal.Field, error)
 	// Record at index, or Field Not found, field 0-indexed
-	Field(fieldIndex int) (*record.Field, error)
+	Field(fieldIndex int) (*internal.Field, error)
 	// A count of the number of data fields in the line
 	FieldCount() int
 	// Get the line number
@@ -54,10 +54,10 @@ type Line interface {
 	UpdateFieldName(fieldIndex int, val string) error
 
 	// Select a field record by name
-	FieldByName(fieldName string) (*record.Field, error)
+	FieldByName(fieldName string) (*internal.Field, error)
 
 	// fields from the line
-	Fields() []record.Field
+	Fields() []internal.Field
 	// returns true if this line is a header line
 	IsHeader() bool
 	// re-indexes line numbers back on order in the line slices
@@ -71,7 +71,7 @@ func (line *documentLine) IsHeader() bool {
 	return false
 }
 
-func (line *documentLine) Fields() []record.Field {
+func (line *documentLine) Fields() []internal.Field {
 	return line.fields
 }
 
@@ -103,7 +103,7 @@ func (line *documentLine) AppendValues(vals ...string) error {
 }
 
 func (line *documentLine) Append(val string) error {
-	field := record.Field{
+	field := internal.Field{
 		Value: val,
 	}
 	if line.doc.HasHeaders() && (line.doc.headerLine == 0 || line.line == line.doc.headerLine) {
@@ -114,7 +114,7 @@ func (line *documentLine) Append(val string) error {
 	fieldInd := len(line.fields)
 	err := line.checkFieldIndex(fieldInd)
 	if err != nil {
-		return ErrFieldCount
+		return err
 	}
 
 	if line.line > line.doc.headerLine && len(line.doc.Headers())-1 >= fieldInd {
@@ -133,7 +133,7 @@ func (line *documentLine) Append(val string) error {
 }
 
 func (line *documentLine) AppendNull() error {
-	field := record.Field{IsNull: true}
+	field := internal.Field{IsNull: true}
 	if line.doc.HasHeaders() && (line.doc.headerLine == 0 || line.line == line.doc.headerLine) {
 		field.IsHeader = true
 		field.FieldName = "-"
@@ -142,7 +142,7 @@ func (line *documentLine) AppendNull() error {
 	fieldInd := len(line.fields)
 	err := line.checkFieldIndex(fieldInd)
 	if err != nil {
-		return ErrFieldCount
+		return err
 	}
 
 	if line.line > line.doc.headerLine && len(line.doc.Headers())-1 > fieldInd {
@@ -160,7 +160,7 @@ func (line *documentLine) AppendNull() error {
 	return nil
 }
 
-func (line *documentLine) NextField() (*record.Field, error) {
+func (line *documentLine) NextField() (*internal.Field, error) {
 	if len(line.fields)-1 < line.currentField {
 		return nil, ErrFieldIndexedNotFound
 	}
@@ -236,14 +236,14 @@ func (line *documentLine) UpdateFieldName(fi int, val string) error {
 	return nil
 }
 
-func (line *documentLine) Field(fieldIndex int) (*record.Field, error) {
+func (line *documentLine) Field(fieldIndex int) (*internal.Field, error) {
 	if len(line.fields)-1 < fieldIndex {
 		return nil, ErrFieldIndexedNotFound
 	}
 	return &line.fields[fieldIndex], nil
 }
 
-func (line *documentLine) FieldByName(name string) (*record.Field, error) {
+func (line *documentLine) FieldByName(name string) (*internal.Field, error) {
 	for _, record := range line.fields {
 		if record.FieldName == name {
 			return &record, nil

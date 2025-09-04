@@ -14,8 +14,6 @@ import (
 
 	doc "github.com/campfhir/wsv/document"
 	"github.com/campfhir/wsv/internal"
-	"github.com/campfhir/wsv/record"
-	"github.com/campfhir/wsv/utils"
 )
 
 var (
@@ -27,14 +25,14 @@ var (
 	ErrCommentPlacement = errors.New("comments should be the last elements in a row, if immediate preceding lines are null, they cannot be omitted and must be explicitly declared")
 )
 
-type InvalidFieldCountError struct {
+type invalidFieldCountError struct {
 	Line    int
 	RawLine []byte
 	Headers []string
 	Fields  []string
 }
 
-func (e *InvalidFieldCountError) Error() string {
+func (e *invalidFieldCountError) Error() string {
 	v := "values"
 	i := "are"
 
@@ -55,29 +53,29 @@ func (e *InvalidFieldCountError) Error() string {
 		i = "is"
 		h = "header"
 	}
-	return fmt.Sprintf("record on line %d: does not have the correct field count, has %d/%d, the %s for the %s (%s) %s missing", e.Line, len(e.Fields), len(e.Headers), v, h, strings.Join(record.SerializeValues(headers), "\t"), i)
+	return fmt.Sprintf("record on line %d: does not have the correct field count, has %d/%d, the %s for the %s (%s) %s missing", e.Line, len(e.Fields), len(e.Headers), v, h, strings.Join(internal.SerializeValues(headers), "\t"), i)
 }
 
-// A ParseError is returned for parsing errors.
+// A parseError is returned for parsing errors.
 // Line numbers are 1-indexed and columns are 0-indexed.
-type ParseError struct {
+type parseError struct {
 	Line           int   // Line where the error occurred
 	FieldPosition  int   // Column (1-based byte index) where the error occurred
 	Err            error // The actual error
-	Field          *record.Field
+	Field          *internal.Field
 	ColumnPosition int
 	RawLine        []byte
 }
 
-func (e *ParseError) Error() string {
+func (e *parseError) Error() string {
 	return fmt.Sprintf("%s\n%s\nparse error on line %d, column %d: %v", e.RawLine, stringPadLeft("^", e.ColumnPosition), e.Line, e.FieldPosition, e.Err)
 }
 
-type ParseErrorCollection struct {
+type parseErrorCollection struct {
 	Errs []error
 }
 
-func (e *ParseErrorCollection) Error() string {
+func (e *parseErrorCollection) Error() string {
 	strs := internal.Map(e.Errs, func(x error, i int, a []error) string {
 		return x.Error()
 	})
@@ -108,7 +106,7 @@ func (r *Reader) Headers() []string {
 // Returns the column name for a given field index, if the index does not exists
 // an empty string is returned
 func columnName(headers []string, index int) string {
-	v, err := utils.GetIndexOfSlice(headers, index)
+	v, err := internal.GetIndexOfSlice(headers, index)
 	if err != nil {
 		return ""
 	}
@@ -133,18 +131,15 @@ func stringPadLeft(str string, length int) string {
 // - By default omitted trailing fields for a record are allowed
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		br:                  bufio.NewReader(r),
-		IsTabular:           true,
-		IncludesHeader:      true,
-		NullTrailingColumns: false,
-		lines:               make([]Line, 0),
-		ended:               false,
+		br:             bufio.NewReader(r),
+		IsTabular:      true,
+		IncludesHeader: true,
 	}
 }
 
 // Return the column name at the index i, will return "" if not found
 func (r *Reader) ColumnNameOf(i int) (*string, error) {
-	return utils.GetIndexOfSlice(r.headers, i)
+	return internal.GetIndexOfSlice(r.headers, i)
 }
 
 // Return the index of a column name
@@ -185,7 +180,7 @@ func (r *Reader) ReadAll() (records []Line, err error) {
 		record, err := r.Read()
 		if err == io.EOF {
 			if len(errs) > 0 {
-				return records, &ParseErrorCollection{Errs: errs}
+				return records, &parseErrorCollection{Errs: errs}
 			}
 			return records, nil
 		}
@@ -271,32 +266,32 @@ lineLoop:
 				continue
 			}
 
-			if (b2 == nil || utils.IsFieldDelimiter(rune(*b2))) && !doubleQuoted {
+			if (b2 == nil || internal.IsFieldDelimiter(rune(*b2))) && !doubleQuoted {
 				doubleQuoted = true
 				startDoubleQuote = i
 				continue
 			}
 
-			if (b3 == nil || utils.IsFieldDelimiter(rune(*b3))) && b2 != nil && rune(*b2) == '"' && (len(line)-1 == i || (len(line)-1 > i && utils.IsFieldDelimiter(nextRune(line[i+1:])))) {
+			if (b3 == nil || internal.IsFieldDelimiter(rune(*b3))) && b2 != nil && rune(*b2) == '"' && (len(line)-1 == i || (len(line)-1 > i && internal.IsFieldDelimiter(nextRune(line[i+1:])))) {
 				data = []byte{}
 				str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull, Col: i, RawLine: line})
 				doubleQuoted = false
 				continue
 			}
 
-			if b2 != nil && rune(*b2) == '"' && (b3 == nil || rune(*b3) != '"') && !(len(line)-1 > i+1 && utils.IsFieldDelimiter(nextRune(line[i+1:])) && b3 != nil && rune(*b3) == '/') && !(len(line)-1 > i+2 && nextRune(line[i+1:]) == '/' && nextRune(line[i+2:]) == '"') {
+			if b2 != nil && rune(*b2) == '"' && (b3 == nil || rune(*b3) != '"') && !(len(line)-1 > i+1 && internal.IsFieldDelimiter(nextRune(line[i+1:])) && b3 != nil && rune(*b3) == '/') && !(len(line)-1 > i+2 && nextRune(line[i+1:]) == '/' && nextRune(line[i+2:]) == '"') {
 				data = append(data, byte('"'))
 				escapedDoubleQuote = i
 				continue
 			}
 
-			if doubleQuoted && (len(line)-1 == i || (len(line)-1 > i && utils.IsFieldDelimiter(nextRune(line[i+1:])))) && (b2 == nil || rune(*b2) != '"' || i > escapedDoubleQuote) {
+			if doubleQuoted && (len(line)-1 == i || (len(line)-1 > i && internal.IsFieldDelimiter(nextRune(line[i+1:])))) && (b2 == nil || rune(*b2) != '"' || i > escapedDoubleQuote) {
 				doubleQuoted = false
 
 			}
 
 		case '-':
-			if r == '-' && (b2 == nil || utils.IsFieldDelimiter(rune(*b2))) && !doubleQuoted {
+			if r == '-' && (b2 == nil || internal.IsFieldDelimiter(rune(*b2))) && !doubleQuoted {
 				isNull = true
 			}
 			fallthrough
@@ -310,24 +305,24 @@ lineLoop:
 				break lineLoop
 			}
 			// currently flagged as null but has more characters left to parse and
-			if isNull && len(line)-1 > i && bytes.IndexFunc(line[i:], utils.IsFieldDelimiter) != 1 {
+			if isNull && len(line)-1 > i && bytes.IndexFunc(line[i:], internal.IsFieldDelimiter) != 1 {
 				// the next immediate character is a white space
-				if b2 != nil && rune(*b2) == '-' && bytes.IndexFunc([]byte{*b1}, utils.IsFieldDelimiter) == 0 {
+				if b2 != nil && rune(*b2) == '-' && bytes.IndexFunc([]byte{*b1}, internal.IsFieldDelimiter) == 0 {
 					data = []byte{}
 				} else {
 					// and is not surround by double quotes we have an invalid
-					return str, &ParseError{FieldPosition: i, Err: ErrInvalidNull, ColumnPosition: i, Line: n, RawLine: line}
+					return str, &parseError{FieldPosition: i, Err: ErrInvalidNull, ColumnPosition: i, Line: n, RawLine: line}
 				}
 
 			}
 
-			isDelim := utils.IsFieldDelimiter(r)
+			isDelim := internal.IsFieldDelimiter(r)
 			if isDelim && (!doubleQuoted) {
 				if len(data) == 0 && !isNull {
 					continue
 				}
 				if string(data) == `"` {
-					return str, &ParseError{Line: n, Err: ErrBareQuote, FieldPosition: i, RawLine: line}
+					return str, &parseError{Line: n, Err: ErrBareQuote, FieldPosition: i, RawLine: line}
 				}
 				str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull, Col: i, RawLine: line})
 				isNull = false
@@ -344,11 +339,11 @@ lineLoop:
 	}
 	if doubleQuoted {
 		// the following string value could not be parsed correctly
-		return str, &ParseError{FieldPosition: startDoubleQuote, Err: ErrBareQuote, Line: n, RawLine: line, ColumnPosition: startDoubleQuote}
+		return str, &parseError{FieldPosition: startDoubleQuote, Err: ErrBareQuote, Line: n, RawLine: line, ColumnPosition: startDoubleQuote}
 	}
 	if len(data) > 0 {
 		if string(data) == `"` {
-			return str, &ParseError{Line: n, Err: ErrBareQuote, FieldPosition: startDoubleQuote, RawLine: line, ColumnPosition: startDoubleQuote}
+			return str, &parseError{Line: n, Err: ErrBareQuote, FieldPosition: startDoubleQuote, RawLine: line, ColumnPosition: startDoubleQuote}
 		}
 		str = append(str, lineField{IsComment: false, Value: string(data), IsNull: isNull, RawLine: line})
 
@@ -367,6 +362,7 @@ func bytesToString(s ...*byte) string {
 	return str
 }
 
+// Returns the line number of the reader
 func (r *Reader) CurrentRow() int {
 	return r.numLine
 }
@@ -390,7 +386,7 @@ func (r *Reader) Read() (Line, error) {
 		return nil, ErrReaderEnded
 	}
 	line := readerLine{
-		fields:     make([]record.Field, 0),
+		fields:     make([]internal.Field, 0),
 		fieldCount: 0,
 	}
 	data, errRead = r.readLine()
@@ -414,7 +410,7 @@ func (r *Reader) Read() (Line, error) {
 	for i, field := range fields {
 		if r.numLine == r.firstDataRow && r.IncludesHeader && !field.IsComment {
 			r.headers = append(r.headers, field.Value)
-			d := record.Field{Value: field.Value}
+			d := internal.Field{Value: field.Value}
 			if field.IsNull {
 				d.IsNull = true
 			}
@@ -430,7 +426,7 @@ func (r *Reader) Read() (Line, error) {
 			// comments must be the first and only value or the last value parsed, if preceding fields are not explicitly defined return an error
 			// the exception being non-tabular documents
 			if i < len(r.headers) && i != 0 && r.IsTabular {
-				return &line, &ParseError{Line: r.numLine, FieldPosition: i + 1, Err: ErrCommentPlacement, ColumnPosition: field.Col, RawLine: field.RawLine}
+				return &line, &parseError{Line: r.numLine, FieldPosition: i + 1, Err: ErrCommentPlacement, ColumnPosition: field.Col, RawLine: field.RawLine}
 			}
 			line.comment = field.Value
 			continue
@@ -442,9 +438,9 @@ func (r *Reader) Read() (Line, error) {
 				if e.IsNull {
 					return "-"
 				}
-				return record.SerializeValue(e.Value)
+				return internal.SerializeValue(e.Value)
 			})
-			return &line, &InvalidFieldCountError{
+			return &line, &invalidFieldCountError{
 				Fields:  append(line.FieldsValues(), extraFields...),
 				Headers: r.headers,
 				Line:    line.line,
@@ -453,7 +449,7 @@ func (r *Reader) Read() (Line, error) {
 		}
 
 		fieldName := columnName(r.headers, i)
-		d := record.Field{Value: field.Value, FieldName: fieldName, IsHeader: false, RowIndex: r.numLine, FieldIndex: i, IsNull: false}
+		d := internal.Field{Value: field.Value, FieldName: fieldName, IsHeader: false, RowIndex: r.numLine, FieldIndex: i, IsNull: false}
 		if field.IsNull {
 			d.IsNull = true
 			d.Value = ""
@@ -475,13 +471,13 @@ func (r *Reader) Read() (Line, error) {
 		for i := range x {
 			h := o + i
 			cname := columnName(r.headers, h)
-			rec := record.Field{IsNull: true, Value: "", FieldIndex: h, RowIndex: r.numLine, FieldName: cname, IsHeader: false}
+			rec := internal.Field{IsNull: true, Value: "", FieldIndex: h, RowIndex: r.numLine, FieldName: cname, IsHeader: false}
 			line.fields = append(line.fields, rec)
 			line.fieldCount++
 		}
 	}
 	if r.IsTabular && r.IncludesHeader && !r.NullTrailingColumns && len(r.headers) > line.fieldCount {
-		return &line, &InvalidFieldCountError{
+		return &line, &invalidFieldCountError{
 			Fields:  line.FieldsValues(),
 			Headers: r.headers,
 			Line:    line.line,
@@ -500,11 +496,11 @@ func nextRune(b []byte) rune {
 
 // Reads the current line into a slice bytes
 func (r *Reader) readLine() ([]byte, error) {
-	line, err := r.br.ReadSlice(utils.CharLineFeed)
+	line, err := r.br.ReadSlice(internal.CharLineFeed)
 	if err == bufio.ErrBufferFull {
 		r.rawBuffer = append(r.rawBuffer[:0], line...)
 		for err == bufio.ErrBufferFull {
-			line, err = r.br.ReadSlice(utils.CharLineFeed)
+			line, err = r.br.ReadSlice(internal.CharLineFeed)
 			r.rawBuffer = append(r.rawBuffer, line...)
 		}
 		line = r.rawBuffer
@@ -513,14 +509,14 @@ func (r *Reader) readLine() ([]byte, error) {
 	if readSize > 0 && err == io.EOF {
 		err = nil
 		// For backwards compatibility, drop trailing \r before EOF.
-		if line[readSize-1] == utils.CharCarriageReturn {
+		if line[readSize-1] == internal.CharCarriageReturn {
 			line = line[:readSize-1]
 		}
 	}
 	r.numLine++
 	r.offset += int64(readSize)
-	if n := len(line); n >= 2 && line[n-2] == utils.CharCarriageReturn && line[n-1] == utils.CharLineFeed {
-		line[n-2] = utils.CharLineFeed
+	if n := len(line); n >= 2 && line[n-2] == internal.CharCarriageReturn && line[n-1] == internal.CharLineFeed {
+		line[n-2] = internal.CharLineFeed
 		line = line[:n-1]
 	}
 	// trim the trailing new line
