@@ -1,24 +1,29 @@
 # WSV
 
-This is an implementation of WSV in Go as described by [https://github.com/Stenway/WSV-TS](https://github.com/Stenway/WSV-TS).
+An implementation of **WSV (Whitespace Separated Values)** in Go, based on [Stenway/WSV-TS](https://github.com/Stenway/WSV-TS).
+
+---
 
 ## Getting Started
+
+Install the package:
 
 ```bash
 go get github.com/campfhir/wsv
 ```
 
-## Package Usages
+---
 
-### Reading File
+## Package Usage
 
-When using the reader you can read line by line, `Read()` or use the convenient `ReadAll()` function which reads all lines into a slice of rows of records/fields.
+### Reading a File
+
+You can read a WSV file line by line using `Read()`, or read all lines at once with `ReadAll()`.
 
 ```go
 package main
 
 import (
-    "fmt"
     "os"
     "testing"
 
@@ -26,44 +31,36 @@ import (
 )
 
 func TestRead(t *testing.T) {
-    dir, ok := os.LookupEnv("PROJECT_DIR")
-    if !ok {
-        t.Error("PROJECT_DIR env not FOUND")
-        t.FailNow()
-        return
-    }
     file, err := os.Open("testdata/sample.wsv")
     if err != nil {
-        t.Error(err)
-        t.FailNow()
-        return
+        t.Fatal(err)
     }
+    defer file.Close()
+
     r := wsv.NewReader(file)
     lines, err := r.ReadAll()
     if err != nil {
-        t.Error(err)
-        return
+        t.Fatal(err)
     }
+
 lineLoop:
     for _, line := range lines {
         for {
-            // field
             field, err := line.NextField()
             if err == wsv.ErrEndOfLine {
                 continue lineLoop
             }
-            // field.SerializeText()
-            // field.Value
-            // field.FieldName
+            // Access field.Value, field.FieldName, or field.SerializeText()
         }
     }
 }
-
 ```
 
-### Writing
+---
 
-When writing a document can be done with a few APIs. Below is a sample application.
+### Writing a File
+
+Documents can be written easily with the provided API:
 
 ```go
 package main
@@ -76,94 +73,138 @@ import (
 
 func main() {
    doc := wsv.NewDocument()
+
    line, err := doc.AddLine()
    if err != nil {
       fmt.Println(err)
       return
    }
-   err = line.Append("name")
-   if err != nil {
-      fmt.Println(err)
-      return
-   }
-   err = line.Append("age")
-   if err != nil {
-      fmt.Println(err)
-      return
-   }
-   err = line.Append("favorite color")
-   if err != nil {
-      fmt.Println(err)
-      return
-   }
+
+   _ = line.Append("name")
+   _ = line.Append("age")
+   _ = line.Append("favorite color")
+
    err = doc.AppendLine(wsv.Field("scott"), wsv.NullField(), wsv.Field("red"))
    if err != nil {
       fmt.Println(err)
-      return
    }
 }
 ```
 
+---
+
 ## CLI Usage
 
-A CLI is included to help with formatting and verifying a WSV document.
+A command-line tool is included for formatting and verifying WSV documents.
 
 | Command/Option                    | Description                                                                                                                                              |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| -i<br />-input<br />-f<br />-file | input file, use - for stdin (default stdin) (default "-")                                                                                                |
-| -o<br />-output                   | output file, use - for stdout (default stdout) (default "-")                                                                                             |
-| -s<br />-sort                     | sort by column(s) seperated by ; will be sorted in the order provided, can use `::` modifier followed by asc or desc to specify direction (defaults asc) |
-| -tabular                          | specify if a document is tabular or not. [Tabular means each record/line has the same number of fields] (default true)                                   |
-| -v<br />-verify                   | verify that input is valid wsv                                                                                                                           |
+| `-i`, `-input`, `-f`, `-file`     | Input file (use `-` for stdin). Default: `-`.                                                                                                            |
+| `-o`, `-output`                   | Output file (use `-` for stdout). Default: `-`.                                                                                                          |
+| `-s`, `-sort`                     | Sort by column(s), separated by `;`. Use `::asc` or `::desc` to specify order. Default: ascending.                                                        |
+| `-tabular`                        | Whether the document is tabular (each line has the same number of fields). Default: `true`.                                                               |
+| `-v`, `-verify`                   | Verify that the input is valid WSV.                                                                                                                       |
 
-## Marsal
+---
 
-A struct can be marshaled into WSV using exported fields or using the `wsv` struct tags.
+## Marshal
 
-Out-of-box support for marshaling `string`, `int`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`, `bool`, and `time.Time` and also supports pointers of those types.
+The **Marshal** function converts Go structs into WSV-encoded output.
 
-### Int Format
+- Iterates over each element of a slice.
+- Processes struct fields according to `wsv` tags.
+- Supports custom formatting and comments.
 
-When marsaling `int` `int8`, `int16`, `int32`, `int64`, `*int` `*int8`, `*int16`, `*int32`, and `*int64` an optional `format:` attribute can be provided using the `fmt.Sprintf` format specifier to print the value of the int. The default will be `%d`.
+### Struct Tag Format
 
-### Float Format
+```go
+wsv:"[field name][,format:<fmt string>][,comment]"
+```
 
-When marshaling `float32`, `float64`, `*float32`, `*float64` an optional `format:` attribute can be provided using the `fmt.Sprintf` format specifier to print the value of the float. The default will be `%.2f` if not specified.
+- `field name`: If empty, defaults to the exported field’s name.
+- `format:` specifies the format (uses `fmt.Sprintf` or `time.Format`).
+- `comment` appends a comment to the line.
 
-### Bool Format
+```go
+type User struct {
+  LastLogin time.Time `wsv:",comment"`
+  Points    float64   `wsv:",format:%.4f,comment"`
+}
+```
 
-When marshaling `bool` or `*bool` an optional `format:` attribute can be provided using a `true|false` format, the literal value to the left of the `|` renders the value of the `true` value and the value to the right the `false` value. The default will be `True|False` if not specified.
+---
 
-_Note: Spaces are not trimmed so `wsv:"field,format: true| false"` will be rendered as `" true"` and `" false"`_
+### Supported Types
 
-### Time Format
+- `string`
+- `int`
+- `bool`
+- `float`
+- `time.Time`
+- Any type implementing `MarshalWSV`
 
-When marsalling `time.Time` or `*time.Time` an optional `format:` attribute can be provided using the `time.Format` function to render value.
+---
 
-The time can be written a literal string layout `2006-01-02` or using a the following shorthand values:
+### String Fields
 
-_Note: Case insensitive_
+- `format:` attribute is ignored for `string`.
 
-- layout
-- ansic
-- unixdate
-- rubydate
-- rfc822
-- rfc822z
-- rfc850
-- rfc1123
-- rfc1123z
-- rfc3339
-- rfc3339nano
-- kitchen
-- stamp
-- stampmilli
-- stampmicro
-- stampnano
-- datetime
-- dateonly
-- date
-- timeonly
-- time
+---
 
-If you need a format with `,` you can escape the `,` by wrapping the `format` in `'` single qoutes. For example `wsv:"field,format:'Jan 02, 2006'`.
+### Integer Fields
+
+- Customizable with `format:` (default: `%d`).
+
+```go
+type Person struct {
+   Age int `wsv:"age,format:%d"`
+}
+```
+
+---
+
+### Boolean Fields
+
+- Format as `<true>|<false>` (default: `True|False`).
+
+```go
+type User struct {
+  IsAdmin bool `wsv:"Admin,format:yes|no"`
+}
+```
+
+---
+
+### Float Fields
+
+- Customizable with `format:` (default: `%.2f`).
+
+```go
+type Employee struct {
+  Salary float32 `wsv:"Weekly Salary,format:%.2f"`
+}
+```
+
+---
+
+### Time Fields
+
+- Customizable with `format:` (default: `time.RFC3339`).
+- Accepts Go’s `time.Format` layouts or shorthand values:
+
+  ```
+  layout, ansic, unixdate, rubydate, rfc822, rfc822z,
+  rfc850, rfc1123, rfc1123z, rfc3339, rfc3339nano,
+  kitchen, stamp, stampmilli, stampmicro, stampnano,
+  datetime, dateonly, date, timeonly, time
+  ```
+
+- Use single quotes `'` to escape commas:
+
+```go
+type TimeOff struct {
+  Date      *time.Time `wsv:"PTO,format:'January 02, 2006'"`
+  Requested time.Time  `wsv:"Requested,format:2006-01-02"`
+  Approved  *time.Time `wsv:",format:rfc3339"`
+}
+```
