@@ -1,0 +1,5 @@
+Name                     "Date of Birth"  "Favorite Color"  Salary     "Job Title"                        Employed  ID    "Hours Per Week"
+"Richard Morris"         "1984-11-12"     Purple            89351.28   Veterinarian                       false     6320  38h30m
+"Andrew Wright"          "1951-04-01"     Sky               -          -                                  true      7330  21h40m50s
+"George Diaz"            "2000-10-04"     Mustard           83851.29   "Tax Preparer"                     true      7236  21h40m50s
+"Michael Davis"          "1987-04-15"     Plum              80464.14   Zookeeper                          false     5354  21h28m6s40ms

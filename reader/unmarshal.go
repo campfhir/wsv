@@ -48,7 +48,7 @@ func unmarshalRow(fields []internal.Field, t reflect.Type) (*reflect.Value, erro
 			continue
 		}
 
-		key, _, format, literalEmptyField := parseWSVTag(fi.Field)
+		key, _, format, literalEmptyField := internal.ParseWSVTag(fi.Field)
 		if key == "-" && !literalEmptyField {
 			continue
 		}
@@ -82,16 +82,24 @@ func setValue(sf reflect.Value, field internal.Field, fieldName, format string, 
 	case reflect.String:
 		sf.SetString(field.Value)
 	case reflect.Bool:
-		format = defaultIfEmpty(format, "True|False")
+		format = internal.DefaultIfEmpty(format, "True|False")
 		return setBool(sf, field.Value, fieldName, format, idx)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if _, ok := sf.Interface().(time.Duration); ok {
+			d, err := time.ParseDuration(field.Value)
+			if err != nil {
+				return err
+			}
+			sf.Set(reflect.ValueOf(d))
+			return nil
+		}
 		return setInt(sf, field.Value, fieldName, format, idx)
 	case reflect.Float32, reflect.Float64:
 		return setFloat(sf, field.Value, fieldName, format, idx)
 
 	case reflect.Struct:
 		if _, ok := sf.Interface().(time.Time); ok {
-			format = parseStructTagDateFormat(format)
+			format = internal.ParseStructTagDateFormat(format)
 			t, err := time.Parse(format, field.Value)
 			if err != nil {
 				return err
@@ -166,7 +174,7 @@ func setPointer(sf reflect.Value, field internal.Field, fieldName, format string
 	case reflect.String:
 		sf.Set(reflect.ValueOf(&field.Value))
 	case reflect.Bool:
-		format = defaultIfEmpty(format, "True|False")
+		format = internal.DefaultIfEmpty(format, "True|False")
 		v, err := internal.ParseBool(field.Value, format)
 		if err != nil {
 			return newUnmarshalError(fieldName, format, idx, "*bool", err)

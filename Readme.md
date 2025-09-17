@@ -141,6 +141,7 @@ type User struct {
 - `bool`
 - `float`
 - `time.Time`
+- `time.Duration`
 - Any type implementing `MarshalWSV`
 
 ---
@@ -148,6 +149,12 @@ type User struct {
 ### String Fields
 
 - `format:` attribute is ignored for `string`.
+
+```go
+type Person struct {
+	FirstName string `wsv:"First Name"`
+}
+```
 
 ---
 
@@ -207,4 +214,147 @@ type TimeOff struct {
   Requested time.Time  `wsv:"Requested,format:2006-01-02"`
   Approved  *time.Time `wsv:",format:rfc3339"`
 }
+```
+
+---
+
+### Duration Fields
+
+- `format:` attribue is ignored for `time.Duration`
+- Calls the time.Duration[String()] method.
+
+```go
+type Status struct {
+	TimeSpent time.Duration `wsv:"Time Spent"`
+}
+```
+
+## Unmarshal
+
+The **Unmarshal** function `wsv` document file returning `[]s` with each record being the struct `s`.
+
+Unmarshal follows the same convention of **Marshal**
+
+### Struct Tag Format
+
+```go
+wsv:"[field name][,format:<fmt string>][,comment]"
+```
+
+- `field name`: If empty, defaults to the exported field’s name.
+- `format:` specifies the format (uses `fmt.Sprintf` or `time.Format`).
+- `comment` appends a comment to the line.
+
+```go
+type User struct {
+  LastLogin time.Time `wsv:",comment"`
+  Points    float64   `wsv:",format:%.4f,comment"`
+}
+```
+
+---
+
+### Supported Types
+
+- `string`
+- `int`
+- `bool`
+- `float`
+- `time.Time`
+- `time.Duration`
+- Any type implementing `MarshalWSV`
+
+---
+
+### String Fields
+
+- `format:` attribute is ignored for `string`.
+
+```go
+type Person struct {
+	FirstName string `wsv:"First Name"`
+}
+```
+
+---
+
+### Integer Fields
+
+- Customizable with `format:` (default: `%d`).
+
+```go
+type Person struct {
+   Age int `wsv:"age,format:%d"`
+}
+```
+
+---
+
+### Boolean Fields
+
+- Format as `<true>|<false>` (default: `True|False`).
+
+```go
+type User struct {
+  IsAdmin bool `wsv:"Admin,format:yes|no"`
+}
+```
+
+---
+
+### Float Fields
+
+- Customizable with `format:` (default: `%.2f`).
+
+```go
+type Employee struct {
+  Salary float32 `wsv:"Weekly Salary,format:%.2f"`
+}
+```
+
+---
+
+### Time Fields
+
+- Customizable with `format:` (default: `time.RFC3339`).
+- Accepts Go’s `time.Format` layouts or shorthand values:
+
+  ```
+  layout, ansic, unixdate, rubydate, rfc822, rfc822z,
+  rfc850, rfc1123, rfc1123z, rfc3339, rfc3339nano,
+  kitchen, stamp, stampmilli, stampmicro, stampnano,
+  datetime, dateonly, date, timeonly, time
+  ```
+
+- Use single quotes `'` to escape commas:
+
+```go
+type TimeOff struct {
+  Date      *time.Time `wsv:"PTO,format:'January 02, 2006'"`
+  Requested time.Time  `wsv:"Requested,format:2006-01-02"`
+  Approved  *time.Time `wsv:",format:rfc3339"`
+}
+```
+
+---
+
+### Duration Fields
+
+- `format:` attribue is ignored for `time.Duration`
+- Calls the time.Duration[ParseDuration()] method.
+
+```go
+
+lines := strings.join(
+	[]string{
+  	"Time Spent",
+    "300m",
+    "24s",
+	},
+	"\n")
+type Status struct {
+	TimeSpent time.Duration `wsv:"Time Spent"`
+}
+
+d, _ := Unmarshal(input)
 ```

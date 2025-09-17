@@ -135,6 +135,17 @@ func main() {
 			} else {
 				column, orderModifier, _ = strings.Cut(column, "::")
 			}
+			if typeModifier == "duration" {
+				switch orderModifier {
+				case "desc":
+					return document.SortDurationDesc(column)
+				case "", "asc":
+					return document.SortDuration(column)
+				}
+				fmt.Fprintf(os.Stderr, "the modifier for order [%s] on the duration column [%s] is invalid", orderModifier, column)
+				os.Exit(1)
+				return nil
+			}
 			if typeModifier == "number" {
 				r := 10
 				if formatModifier != "" {
@@ -157,7 +168,6 @@ func main() {
 				return nil
 			}
 			if strings.HasPrefix(typeModifier, "date") {
-
 				format := time.DateOnly
 				s, _ := strings.CutPrefix(typeModifier, "date(")
 				s, _ = strings.CutSuffix(s, ")")

@@ -1,13 +1,11 @@
-package reader
+package document
 
 import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
-	"github.com/campfhir/wsv/document"
 	"github.com/campfhir/wsv/internal"
 )
 
@@ -39,7 +37,7 @@ func marshalRow(v reflect.Value) (*row, error) {
 		}
 
 		// Parse tag
-		key, isComment, format, literalEmptyField := parseWSVTag(fieldType)
+		key, isComment, format, literalEmptyField := internal.ParseWSVTag(fieldType)
 		if key == "-" && !literalEmptyField {
 			continue
 		}
@@ -85,7 +83,16 @@ func marshalRow(v reflect.Value) (*row, error) {
 			fields = append(fields, internal.Field{FieldName: key, Value: val, FieldIndex: i})
 
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			format = defaultIfEmpty(format, "%d")
+			if t, ok := fieldValue.Interface().(time.Duration); ok {
+				val := t.String()
+				if isComment {
+					comment = appendComment(comment, val)
+					continue
+				}
+				fields = append(fields, internal.Field{FieldName: key, Value: val, FieldIndex: i})
+				continue
+			}
+			format = internal.DefaultIfEmpty(format, "%d")
 			val := fmt.Sprintf(format, fieldValue.Int())
 			if isComment {
 				comment = appendComment(comment, val)
@@ -94,7 +101,7 @@ func marshalRow(v reflect.Value) (*row, error) {
 			fields = append(fields, internal.Field{FieldName: key, Value: val, FieldIndex: i})
 
 		case reflect.Float32, reflect.Float64:
-			format = defaultIfEmpty(format, "%.2f")
+			format = internal.DefaultIfEmpty(format, "%.2f")
 			val := fmt.Sprintf(format, fieldValue.Float())
 			if isComment {
 				comment = appendComment(comment, val)
@@ -103,7 +110,7 @@ func marshalRow(v reflect.Value) (*row, error) {
 			fields = append(fields, internal.Field{FieldName: key, Value: val, FieldIndex: i})
 
 		case reflect.Bool:
-			format = defaultIfEmpty(format, "True|False")
+			format = internal.DefaultIfEmpty(format, "True|False")
 			val := internal.FormatBool(fieldValue.Bool(), format)
 			if isComment {
 				comment = appendComment(comment, val)
@@ -113,7 +120,7 @@ func marshalRow(v reflect.Value) (*row, error) {
 
 		case reflect.Struct:
 			if t, ok := fieldValue.Interface().(time.Time); ok {
-				format = parseStructTagDateFormat(format)
+				format = internal.ParseStructTagDateFormat(format)
 				val := t.Format(format)
 				if isComment {
 					comment = appendComment(comment, val)
@@ -131,28 +138,6 @@ func marshalRow(v reflect.Value) (*row, error) {
 	}
 
 	return &row{fields, comment}, nil
-}
-
-func parseWSVTag(f reflect.StructField) (key string, isComment bool, format string, literalEmptyField bool) {
-	key = f.Name
-	if tag := f.Tag.Get("wsv"); tag != "" {
-		parts := internal.SplitQuoted(tag)
-		if len(parts) > 0 {
-			key = parts[0]
-		}
-		if key == "-" && len(parts) >= 2 {
-			literalEmptyField = true
-		}
-		for _, p := range parts[1:] {
-			switch {
-			case strings.HasPrefix(p, "comment"):
-				isComment = true
-			case strings.HasPrefix(p, "format:"):
-				format = strings.TrimPrefix(p, "format:")
-			}
-		}
-	}
-	return
 }
 
 func callCustomMarshaller(u MarshalWSV, format string) (val string, isNull bool, err error) {
@@ -185,54 +170,6 @@ func appendComment(existing, newVal string) string {
 		return newVal
 	}
 	return existing + " " + newVal
-}
-
-func defaultIfEmpty(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
-}
-
-// central lookup
-var dateLayouts = map[string]string{
-	"layout":      time.Layout,
-	"ansic":       time.ANSIC,
-	"unixdate":    time.UnixDate,
-	"rubydate":    time.RubyDate,
-	"rfc822":      time.RFC822,
-	"rfc822z":     time.RFC822Z,
-	"rfc850":      time.RFC850,
-	"rfc1123":     time.RFC1123,
-	"rfc1123z":    time.RFC1123Z,
-	"rfc3339":     time.RFC3339,
-	"rfc3339nano": time.RFC3339Nano,
-	"kitchen":     time.Kitchen,
-	"stamp":       time.Stamp,
-	"stampmilli":  time.StampMilli,
-	"stampmicro":  time.StampMicro,
-	"stampnano":   time.StampNano,
-	"datetime":    time.DateTime,
-	"dateonly":    time.DateOnly,
-	"date":        time.DateOnly,
-	"timeonly":    time.TimeOnly,
-	"time":        time.TimeOnly,
-}
-
-func parseStructTagDateFormat(format string) string {
-	if format == "" {
-		return time.RFC3339
-	}
-
-	// normalize to lowercase
-	key := strings.ToLower(format)
-
-	if layout, ok := dateLayouts[key]; ok {
-		return layout
-	}
-
-	// fallback: custom layout string
-	return format
 }
 
 // Marshal returns a WSV encoding of s with the option to sort by columns.
@@ -370,7 +307,7 @@ func MarshalWithOptions[T any](s []T, options ...*internal.SortOption) ([]byte, 
 	if len(rows) <= 0 {
 		return nil, ErrNoDataMarshalled
 	}
-	doc := document.NewDocument()
+	doc := NewDocument()
 	line, err := doc.AddLine()
 	if err != nil {
 		return nil, err

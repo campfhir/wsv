@@ -490,5 +490,36 @@ func TestLastColumnHasFieldName(t *testing.T) {
 		t.Error("was not able to get the last field", err)
 		return
 	}
+}
 
+func TestDurationFieldsAscSorting(t *testing.T) {
+
+	doc := NewDocument()
+	doc.AppendLine(Field("Name"), Field("Age"), Field("Hours Per Week"))
+	doc.AppendLine(Field("Scott"), Field("18"), Field("21h16m"))
+	doc.AppendLine(Field("Jane"), Field("79"), Field("23h32m"))
+	doc.AppendLine(Field("Patrick"), Field("100"), Field("41h13m6s"))
+	doc.AppendLine(Field("Zak"), Field("100"), Field("56h3m"))
+	doc.AppendLine(Field("George"), Field("55"), Field("26h45m18s"))
+
+	doc.SortBy(SortDuration("Hours Per Week"))
+
+	expDoc := NewDocument()
+	expDoc.AppendLine(Field("Name"), Field("Age"), Field("Hours Per Week"))
+	expDoc.AppendLine(Field("Scott"), Field("18"), Field("21h16m"))
+	expDoc.AppendLine(Field("Jane"), Field("79"), Field("23h32m"))
+	expDoc.AppendLine(Field("George"), Field("55"), Field("26h45m18s"))
+	expDoc.AppendLine(Field("Patrick"), Field("100"), Field("41h13m6s"))
+	expDoc.AppendLine(Field("Zak"), Field("100"), Field("56h3m"))
+	d, err := doc.WriteAll()
+	if err != nil {
+		t.Error(err)
+	}
+	e, err := expDoc.WriteAll()
+	if err != nil {
+		t.Error(err)
+	}
+	if string(e) != string(d) {
+		t.Error("did not sort the expected way", "\n", string(e), "\n", string(d))
+	}
 }

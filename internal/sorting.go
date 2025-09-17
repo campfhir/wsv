@@ -7,5 +7,6 @@ type SortOption struct {
 	AsNumber    bool
 	NumberRadix int
 	AsTime      bool
+	AsDuration  bool
 	TimeFormat  string
 }

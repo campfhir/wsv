@@ -1,9 +1,12 @@
-package reader
+package document_test
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/campfhir/wsv/document"
 )
 
 type Capital string
@@ -32,21 +35,24 @@ type CountryInfo struct {
 
 func TestMarshal(t *testing.T) {
 	type Example struct {
-		A int         `wsv:"A,format:'%#x'"`
-		B int16       `wsv:"int16,format:%d"`
-		C *int32      `wsv:"int32,format:%x"`
-		D int8        `wsv:"eight"`
-		E *float32    `wsv:"-,"`                 // with a comma the field with - does try to marshal
-		K int         `wsv:",format:%d,comment"` // formats using %d but adds to comment
-		N CountryInfo `wsv:"-"`                  // this is ignored because there is no comma
+		A int           `wsv:"A,format:'%#x'"`
+		B int16         `wsv:"int16,format:%d"`
+		C *int32        `wsv:"int32,format:%x"`
+		D int8          `wsv:"eight"`
+		T time.Duration `wsv:"Duration"`
+		E *float32      `wsv:"-,"`                 // with a comma the field with - does try to marshal
+		K int           `wsv:",format:%d,comment"` // formats using %d but adds to comment
+		N CountryInfo   `wsv:"-"`                  // this is ignored because there is no comma
 	}
 	c := int32(2243)
 	e := float32(5020.24)
-	d, err := Marshal([]Example{{
+	tt, _ := time.ParseDuration("300ms")
+	d, err := document.Marshal([]Example{{
 		A: 42,
 		B: int16(21),
 		C: &c,
 		D: 100,
+		T: tt,
 		K: 1000,
 		E: &e,
 	}})
@@ -54,8 +60,8 @@ func TestMarshal(t *testing.T) {
 		t.Fatal(err)
 	}
 	exp_lines := []string{
-		"A     int16  int32  eight  \"-\"",
-		"0x2a  21     8c3    100    5020.24  #1000",
+		"A     int16  int32  eight  Duration  \"-\"",
+		"0x2a  21     8c3    100    300ms     5020.24  #1000",
 		``,
 	}
 	lines := strings.Split(string(d), "\n")
@@ -403,7 +409,7 @@ func TestMarsalSimpleSlice(t *testing.T) {
 		},
 	}
 
-	d, err := Marshal(countries)
+	d, err := document.Marshal(countries)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -460,7 +466,7 @@ func TestMarshalMultipleComments(t *testing.T) {
 		Fact1     string `wsv:",comment"` // field name does not matter with the comment attribute
 		Fact2     string `wsv:",comment"`
 	}
-	d, err := Marshal([]Person{
+	d, err := document.Marshal([]Person{
 		{
 			FirstName: "Scott",
 			LastName:  "Eremia-Roden",
@@ -497,5 +503,79 @@ func TestMarshalMultipleComments(t *testing.T) {
 		if ex != ln {
 			t.Error("the line", i+1, "does not have the expected value\n", ex, "!=\n", ln)
 		}
+	}
+}
+
+func TestMarshalString(t *testing.T) {
+	type Example struct {
+		Str string `wsv:"String Value"`
+	}
+	b, err := document.Marshal([]Example{{"a value"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := []byte(strings.Join([]string{
+		"String Value",
+		"a value",
+		"\n",
+	}, "\n"))
+	if bytes.Equal(b, exp) {
+		t.Error("not the same")
+	}
+}
+
+func TestMarshalStringPtr(t *testing.T) {
+	type Example struct {
+		Str *string `wsv:"String Value"`
+	}
+	ptr := "a value"
+	b, err := document.Marshal([]Example{{Str: &ptr}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := []byte(strings.Join([]string{
+		"String Value",
+		"a value",
+		"\n",
+	}, "\n"))
+	if bytes.Equal(b, exp) {
+		t.Error("not the same")
+	}
+}
+
+func TestMarshalInt(t *testing.T) {
+	type Example struct {
+		Number string `wsv:"Num"`
+	}
+	b, err := document.Marshal([]Example{{"6"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := []byte(strings.Join([]string{
+		"Num",
+		"6",
+		"\n",
+	}, "\n"))
+	if bytes.Equal(b, exp) {
+		t.Error("not the same")
+	}
+}
+
+func TestMarshalIntPtr(t *testing.T) {
+	type Example struct {
+		Number *int `wsv:"Num"`
+	}
+	ptr := 6
+	b, err := document.Marshal([]Example{{Number: &ptr}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := []byte(strings.Join([]string{
+		"Num",
+		"6",
+		"\n",
+	}, "\n"))
+	if bytes.Equal(b, exp) {
+		t.Error("not the same")
 	}
 }

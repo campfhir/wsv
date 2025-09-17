@@ -194,6 +194,14 @@ func SortTimeDesc(fieldName string, format string) *internal.SortOption {
 	return &internal.SortOption{FieldName: fieldName, AsTime: true, Desc: true, TimeFormat: format}
 }
 
+func SortDuration(fieldName string) *internal.SortOption {
+	return &internal.SortOption{FieldName: fieldName, AsDuration: true}
+}
+
+func SortDurationDesc(fieldName string) *internal.SortOption {
+	return &internal.SortOption{FieldName: fieldName, AsDuration: true, Desc: true}
+}
+
 // Sorts the documents lines in place based on the sort options
 //
 // Will sort until finished or a field specified is not found, in which case a ErrFieldNotFoundForSortBy is returned
@@ -250,6 +258,20 @@ func (doc *Document) SortBy(sortOptions ...*internal.SortOption) error {
 //	 0 when line[Field].Value == cmpLine[Field].Value
 //	+1 when line[Field].Value > cmpLine[Field].Value or cmpLine[Field].Value is nil
 func sortFieldsColumn(opt *internal.SortOption, a *internal.Field, b *internal.Field) int {
+	if opt.AsDuration {
+		order := 0
+		if a == nil || a.IsNull {
+			order = +1
+		} else if b == nil || b.IsNull {
+			order = -1
+		} else {
+			order = sortDuration(a, b)
+		}
+		if opt.Desc {
+			return order * -1
+		}
+		return order
+	}
 
 	if opt.AsTime {
 		order := 0
@@ -304,6 +326,29 @@ func sortNumbers(radix int, a string, b string) int {
 		return +1
 	}
 
+	return 0
+}
+
+func sortDuration(a *internal.Field, b *internal.Field) int {
+	if a == nil || a.IsNull {
+		return +1
+	}
+	if b == nil || b.IsNull {
+		return -1
+	}
+	time1, err := time.ParseDuration(a.Value)
+	if err != nil {
+		return +1
+	}
+	time2, err := time.ParseDuration(b.Value)
+	if err != nil {
+		return -1
+	}
+	if time1 < time2 {
+		return -1
+	} else if time1 > time2 {
+		return +1
+	}
 	return 0
 }
 
